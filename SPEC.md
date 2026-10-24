@@ -1,0 +1,433 @@
+# FinSight: Product Specification
+
+| | |
+|---|---|
+| **Product** | FinSight: AI stock briefings for wealth advisors |
+| **Version** | 1.0 (MVP) |
+| **Status** | Built, pending first live run with production keys |
+| **Last updated** | 2026-10-24 |
+
+---
+
+## 1. Overview
+
+### 1.1 Problem
+Before a client conversation, advisors at a wealth management firm need to get up to speed on a stock fast. Today that means checking a quote terminal, pulling financials and reading long SEC filings (10-K, 10-Q, 8-K), which takes 30–60 minutes per company.
+
+### 1.2 Solution
+A mobile app where an advisor enters a ticker and, in about a minute, receives a structured briefing produced by a team of AI agents. The briefing combines:
+- the current quote and key statistics
+- multi-year financials taken directly from SEC XBRL data
+- summaries of the latest 10-K (business, management discussion, risk factors)
+- recent filing activity
+- neutral, compliance-reviewed talking points
+
+Every briefing is automatically quality-scored, so advisors and the firm can see how far to trust it.
+
+### 1.3 Users
+| User | Need |
+|---|---|
+| **Financial advisor** (primary) | A fast, reliable, citation-backed summary of a stock before a client meeting |
+| **Compliance / firm admin** (secondary) | Assurance that AI output contains no investment recommendations, and a record of quality scores and advisor feedback |
+
+### 1.4 Goals
+1. Get an advisor up to speed on any SEC-registered US stock in under 2 minutes of reading.
+2. Ground every statement in source data: SEC filings and market data.
+3. Never produce buy/sell/hold recommendations, price predictions or guarantees.
+4. Measure output quality on every briefing (LLM evaluation).
+
+### 1.5 Non-goals (v1)
+- Personalized advice or portfolio fit for specific clients
+- Non-US or non-SEC securities, ETFs, mutual funds, crypto
+- Real-time streaming quotes or charting
+- Earnings call transcripts, news feeds, analyst ratings
+- Free-form chat over filings
+
+---
+
+## 2. User Experience
+
+### 2.1 Screens
+| Screen | Contents |
+|---|---|
+| **Login** | Email + password sign-in and sign-up (Supabase Auth). Shows a confirmation notice if email verification is on. |
+| **Home** | Ticker input with a "Brief me" button; list of the user's recent briefings (ticker, company, date, overall quality score, or running/failed state); pull to refresh; sign out. |
+| **Briefing: in progress** | Spinner, the current pipeline step (e.g. "Analysts at work: market, fundamentals, filings, risks"), and the list of agents. Updates every 2.5 s. |
+| **Briefing: complete** | See 2.2. |
+| **Briefing: failed** | The error message (e.g. unknown ticker). |
+
+### 2.2 Briefing content (in display order)
+1. **Snapshot:** ticker, company name, industry, price, day change ($ and %), market cap, P/E (TTM), 52-week range, beta, quote timestamp
+2. **Executive summary:** 4–6 sentences
+3. **Key takeaways:** 4–6 bullets
+4. **Market:** commentary and 3–5 notable stats
+5. **Financials (SEC filings):** table of revenue, operating income, net income, diluted EPS, cash and long-term debt for up to 4 years; summary; trend per metric (▲ ▼ ▬ ◆); strengths; concerns
+6. **Business:** overview, segments, management outlook
+7. **Top risks (10-K Item 1A):** 5 risks, each with a category, plain-language summary and a verbatim evidence quote from the filing
+8. **Recent filings:** up to 6 notable 10-K/10-Q/8-K filings with summaries, and a link to the latest 10-K on SEC.gov
+9. **Client talking points:** 3–5 neutral points
+10. **Questions to consider:** 2–4 open questions
+11. **AI quality evaluation:**
+    - overall score and four score bars
+    - the judge's rationale
+    - possibly unsupported claims
+    - automated checks passed
+    - number of compliance edits
+    - expandable agent trace (agent, latency, tokens)
+12. **Feedback:** 👍 / 👎
+13. **Disclaimer**
+
+### 2.3 Primary flow
+1. The advisor signs in.
+2. They enter a ticker and tap "Brief me".
+3. The API creates a briefing record and returns its id immediately (HTTP 202).
+4. The app opens the briefing screen and polls for status.
+5. The agent pipeline runs in the background, updating the progress text.
+6. When the status becomes `complete`, the full briefing is shown. The advisor reads it, opens the 10-K if needed, and leaves feedback.
+7. The briefing stays in the advisor's history.
+
+---
+
+## 3. Functional Requirements
+
+| ID | Requirement |
+|---|---|
+| FR-1 | Users must authenticate (Supabase email/password) before using any feature. |
+| FR-2 | Users can request a briefing for a ticker matching `^[A-Z][A-Z0-9.\-]{0,9}$`. Unknown tickers fail with a clear message. |
+| FR-3 | A briefing request returns within 1 s; generation runs asynchronously. |
+| FR-4 | The app shows live progress while a briefing runs. |
+| FR-5 | The briefing includes every section in §2.2. |
+| FR-6 | Financial figures are taken from SEC XBRL data by code and are never generated by the LLM. |
+| FR-7 | Each risk includes a verbatim excerpt from the 10-K as evidence. |
+| FR-8 | A compliance review step removes recommendations, price predictions, guarantees, personalized advice and promotional language before the briefing is saved. |
+| FR-9 | Every briefing carries a fixed disclaimer. |
+| FR-10 | Every briefing is evaluated by automated checks and an LLM judge, and the results are stored and shown. |
+| FR-11 | Every LLM call is logged with agent name, model, tokens, latency and status. |
+| FR-12 | Users see only their own briefings, evaluations, logs and feedback. |
+| FR-13 | Users can rate a briefing 👍/👎 once (re-rating overwrites). |
+| FR-14 | An offline evaluation script runs the full pipeline over a fixed ticker set and reports scores. |
+
+---
+
+## 4. System Architecture
+
+```
+┌──────────────────────┐   Supabase JWT    ┌──────────────────────────────────────┐
+│  Expo React Native   ├──────────────────►│  Node.js API (Express) on Render     │
+│  app (iOS/Android/   │◄──────────────────┤                                      │
+│  web)                │   JSON + polling  │  Orchestrator                        │
+└─────────┬────────────┘                   │   ├─ Data tools ──► SEC EDGAR        │
+          │ sign-in                        │   │              └► Finnhub          │
+          ▼                                │   ├─ 7 agents ────► Claude API       │
+┌──────────────────────┐                   │   └─ Persistence ─┐                  │
+│  Supabase Auth       │                   └───────────────────┼──────────────────┘
+└──────────────────────┘                                       ▼
+                                       ┌────────────────────────────────────────┐
+                                       │  Supabase Postgres (RLS)               │
+                                       │  briefings · evaluations · agent_logs  │
+                                       │  feedback                              │
+                                       └────────────────────────────────────────┘
+```
+
+### 4.1 Technology
+| Layer | Choice |
+|---|---|
+| Mobile app | React Native 0.88, Expo SDK 58, `@supabase/supabase-js`, AsyncStorage session storage |
+| API | Node.js 22, Express 5, ES modules |
+| LLM | Claude Sonnet 5.5 (`claude-sonnet-5-5`) through `@anthropic-ai/sdk`, structured outputs, server-side refusal fallback (`fallbacks: "default"`) |
+| Database / auth | Supabase Postgres and Supabase Auth |
+| Market data | Finnhub REST API (quote, metrics, company profile) |
+| Filings data | SEC EDGAR (`company_tickers.json`, submissions API, XBRL company-facts API, filing documents) |
+| Hosting | Render (API), Expo Go / static web export (app), GitHub (source) |
+
+### 4.2 Repository layout
+```
+├── mobile/                 Expo app
+│   ├── App.js              session handling + screen switching
+│   └── src/
+│       ├── lib/            supabase.js, api.js
+│       ├── screens/        LoginScreen, HomeScreen, BriefingScreen
+│       └── theme.js
+├── server/
+│   ├── src/
+│   │   ├── index.js        Express routes + background processing
+│   │   ├── config.js       environment config
+│   │   ├── lib/            llm.js (agent runner), supabase.js, auth.js
+│   │   ├── tools/          sec.js, quote.js
+│   │   └── agents/         7 agents, orchestrator.js, schema.js
+│   └── evals/              run.js, golden.json, results/
+├── supabase/schema.sql
+├── render.yaml
+├── README.md
+└── SPEC.md
+```
+
+---
+
+## 5. Multi-Agent Pipeline
+
+### 5.1 Orchestration
+```
+1. Look up company           ticker → CIK, name (SEC)
+2. Gather data (parallel)    quote (Finnhub) · filing list · XBRL financials (SEC)
+3. Read latest 10-K          extract Item 1, Item 1A, Item 7
+4. Specialists (parallel)    Market · Fundamentals · Filings · Risk
+5. Synthesis                 Briefing Writer
+6. Compliance                Compliance Reviewer
+7. Evaluation                deterministic checks + Evaluator (LLM judge)
+8. Persist                   briefing content, evaluation; status → complete
+```
+Any failure in steps 1–7 marks the briefing `failed` with the error message. If 10-K extraction fails, the pipeline continues and agents receive "Not available".
+
+### 5.2 Agent runner (`lib/llm.js`)
+Every agent is one Claude Messages API call with:
+- a system prompt (shared house rules plus the agent's role)
+- one user message containing the data
+- `output_config.format` = a strict JSON schema (all fields required, no extra properties)
+- `output_config.effort` = per-agent effort level
+- `max_tokens` = 16,000
+- server-side fallback beta `server-side-fallback-2026-07-01` with `fallbacks: "default"`
+
+A `refusal` or `max_tokens` stop reason is treated as an error. Each call writes one `agent_logs` row, on success or error.
+
+**House rules (shared by all analyst agents):**
+- use only the provided data, and never invent numbers, dates or facts
+- stay neutral, with no buy/sell/hold recommendations and no price predictions
+- be concise and plain-language for an advisor audience
+
+### 5.3 Agent catalogue
+| # | Agent | Effort | Input | Output schema (fields) |
+|---|---|---|---|---|
+| 1 | **Market Analyst** | low | Quote + key stats JSON | `headline`, `commentary`, `key_stats[]` |
+| 2 | **Fundamentals Analyst** | medium | XBRL annual series JSON | `summary`, `trends[{metric, direction: up\|down\|flat\|mixed, detail}]`, `strengths[]`, `concerns[]` |
+| 3 | **Filings Analyst** | medium | Recent filings list, 10-K Item 1 (≤30k chars), Item 7 (≤80k chars) | `business_overview`, `segments[]`, `management_outlook`, `recent_events[{date, form, summary}]` |
+| 4 | **Risk Analyst** | medium | 10-K Item 1A (≤120k chars) | `overview`, `top_risks[{title, category, summary, evidence}]` (5 risks; category ∈ market, operational, financial, regulatory, legal, competitive, macroeconomic, technology, other) |
+| 5 | **Briefing Writer** | medium | Outputs of agents 1–4 | `executive_summary`, `key_takeaways[]`, `talking_points[]`, `questions_to_consider[]` |
+| 6 | **Compliance Reviewer** | low | Writer output | `revised` (same schema as Writer), `issues_found[{original, reason, fix}]` |
+| 7 | **Evaluator** | medium | Final briefing + raw source data (quote, financials, filings, 10-K sections) | `faithfulness`, `completeness`, `compliance`, `clarity` (1–5), `rationale`, `unsupported_claims[]` |
+
+When a section is cut to its character limit, the agent is told the shown and total lengths.
+
+### 5.4 Compliance rules (agent 6)
+Rewrite any text that:
+- recommends buy/sell/hold or calls the stock a good/bad investment
+- predicts or targets prices or returns
+- promises or guarantees performance
+- reads as personalized advice
+- uses promotional or exaggerated language
+
+Facts and figures stay unchanged.
+
+**Disclaimer (fixed text):**
+> For internal advisor use only. This summary is generated by AI from public market data and SEC filings, may contain errors, and is not investment advice or a recommendation to buy, sell or hold any security. Verify against the original filings before use with clients.
+
+---
+
+## 6. Data Sources and Tools
+
+### 6.1 SEC EDGAR (`tools/sec.js`)
+All requests send the `SEC_USER_AGENT` header, as SEC requires.
+
+| Function | Endpoint | Behavior |
+|---|---|---|
+| `lookupCompany(ticker)` | `www.sec.gov/files/company_tickers.json` | Ticker → `{ticker, name, cik}` (CIK zero-padded to 10 digits). Cached in memory for the life of the process. |
+| `getRecentFilings(cik)` | `data.sec.gov/submissions/CIK##########.json` | The 12 most recent 10-K/10-Q/8-K filings (form, dates, 8-K item codes, document URL), plus `latest10K` found separately in the full recent list. |
+| `getFinancials(cik)` | `data.sec.gov/api/xbrl/companyfacts/CIK##########.json` | The last 4 calendar years for each metric (below). When a company has switched XBRL tags over time, the tag with the most recent data wins. |
+| `get10KSections(url)` | 10-K primary document | HTML → text, then extracts Item 1 (Business), Item 1A (Risk Factors) and Item 7 (MD&A). Start and end markers must be full headings (item number + title) and tolerate split drop-cap letters. The longest start→end span is used, which skips the table of contents. Sections under 500 chars are treated as missing. |
+
+**XBRL metrics:**
+| Metric | Type | Tags (in priority order) |
+|---|---|---|
+| revenue | annual (`CY####` frames) | Revenues, RevenueFromContractWithCustomerExcludingAssessedTax, RevenueFromContractWithCustomerIncludingAssessedTax, SalesRevenueNet |
+| operatingIncome | annual | OperatingIncomeLoss |
+| netIncome | annual | NetIncomeLoss |
+| epsDiluted | annual | EarningsPerShareDiluted, EarningsPerShareBasicAndDiluted |
+| operatingCashFlow | annual | NetCashProvidedByUsedInOperatingActivities |
+| cash | year-end (`CY####Q4I` frames) | CashAndCashEquivalentsAtCarryingValue |
+| totalAssets | year-end | Assets |
+| totalLiabilities | year-end | Liabilities |
+| longTermDebt | year-end | LongTermDebtNoncurrent, LongTermDebt |
+| stockholdersEquity | year-end | StockholdersEquity |
+
+### 6.2 Finnhub (`tools/quote.js`)
+`/quote`, `/stock/metric?metric=all` and `/stock/profile2`, called in parallel. They return:
+- price, change, change %, open, high, low, previous close, `asOf`
+- 52-week high and low, P/E, beta, dividend yield
+- market cap (USD millions), industry, exchange, logo
+
+The request fails if no price is returned.
+
+---
+
+## 7. API Specification
+
+Base URL: Render service URL (local: `http://localhost:3001`). All routes except `/health` require `Authorization: Bearer <Supabase access token>`, verified with `supabase.auth.getUser`.
+
+| Method | Path | Request | Response |
+|---|---|---|---|
+| GET | `/health` | – | `200 {ok: true}` |
+| POST | `/briefings` | `{ticker}` | `202 {id}`. `400` invalid ticker, `401` unauthenticated |
+| GET | `/briefings` | – | `200 [{id, ticker, company_name, status, created_at, evaluations:[{overall}]}]`, newest first, max 50 |
+| GET | `/briefings/:id` | – | `200 {id, ticker, company_name, status, progress, content, error, created_at, evaluations:[…], agent_logs:[{agent, model, input_tokens, output_tokens, latency_ms, status}]}`. `404` if not found or not owned |
+| POST | `/briefings/:id/feedback` | `{rating: 1\|-1, comment?}` | `200 {ok: true}`. `400` bad rating, `404` not owned |
+
+**Briefing `status`:** `running` → `complete` or `failed`.
+
+**`content` shape:**
+```
+company       {ticker, name, cik, industry, exchange, logo}
+snapshot      Finnhub quote object (§6.2)
+financials    XBRL series {metric: [{year, value}]}
+executive_summary, key_takeaways[], talking_points[], questions_to_consider[]
+market        Market Analyst output
+fundamentals  Fundamentals Analyst output
+business      Filings Analyst output
+risks         Risk Analyst output
+sources       {latest10K, filings[]}
+compliance    {issues_found[]}
+disclaimer    string
+```
+
+---
+
+## 8. Data Model (Supabase)
+
+| Table | Key columns | Notes |
+|---|---|---|
+| `briefings` | `id`, `user_id → auth.users`, `ticker`, `company_name`, `status` (running/complete/failed), `progress`, `source_data` jsonb, `content` jsonb, `error`, `created_at`, `completed_at` | Index on `(user_id, created_at desc)` |
+| `evaluations` | `id`, `briefing_id`, `faithfulness`, `completeness`, `compliance`, `clarity` (1–5), `overall` numeric(3,2), `rationale`, `issues` jsonb, `checks` jsonb, `judge_model` | One per briefing |
+| `agent_logs` | `id`, `briefing_id`, `agent`, `model`, `input_tokens`, `output_tokens`, `latency_ms`, `status`, `error` | One per LLM call |
+| `feedback` | `id`, `briefing_id`, `user_id`, `rating` (−1/1), `comment` | Unique `(briefing_id, user_id)` |
+
+**Access control:**
+- Row-level security is enabled on all four tables.
+- Users can `select` their own rows. For `evaluations` and `agent_logs`, that means rows whose briefing they own.
+- All writes go through the API using the service-role key, which never ships in the app.
+
+---
+
+## 9. LLM Evaluation
+
+### 9.1 Deterministic checks (every briefing, no LLM cost)
+| Check | Pass condition |
+|---|---|
+| `has_disclaimer` | Disclaimer present |
+| `no_banned_phrases` | None of these patterns match: "you should buy/sell/hold", "buy/sell rating/recommendation", "guarantee(d/s)", "risk-free", "price target", "will rise/soar/double/go up" |
+| `has_quote` | Snapshot price present |
+| `quote_fresh` | Quote timestamp within 4 days |
+| `has_financials` | At least one XBRL series is non-empty |
+| `has_risks` | At least one risk returned |
+| `has_summary` | Executive summary present |
+
+The result is stored as `checks` with `passed`/`total` and any banned-pattern hits.
+
+### 9.2 LLM-as-judge (every briefing)
+The Evaluator agent (model `EVAL_MODEL`) compares the final briefing with the raw source data and scores:
+| Dimension | Definition |
+|---|---|
+| Faithfulness | Every claim is supported by source data; no invented facts or numbers |
+| Completeness | Covers price, business, financials, outlook, risks and recent filings |
+| Compliance | No recommendations, predictions, guarantees or personalized advice |
+| Clarity | An advisor can get up to speed in under two minutes |
+
+Scores are clamped to integers from 1 to 5. `overall` is the mean of the four, to 2 decimal places. The judge also lists any unsupported claims.
+
+### 9.3 Offline evaluation (`npm run eval`)
+- **Golden set:** AAPL, MSFT, JPM, CVX, PFE, each with expected risk keywords.
+- **Per ticker:** the four judge scores, overall, checks passed, **risk recall** (share of expected keywords found in the risk output) and runtime.
+- **Output:** a console table, averages, and a JSON file in `server/evals/results/`.
+- **Arguments:** tickers can be passed to run a subset or new tickers.
+
+### 9.4 Observability and feedback
+- `agent_logs` gives a per-agent token and latency trace for every briefing; the app shows it.
+- `feedback` records advisor ratings, for comparison with judge scores.
+
+---
+
+## 10. Non-Functional Requirements
+
+| Area | Requirement |
+|---|---|
+| **Latency** | Briefing request returns < 1 s; full briefing typically 30–90 s (target < 120 s). |
+| **Cost** | 7 LLM calls per briefing (Sonnet 5.5). Largest inputs are the 10-K sections, capped at 230k chars total. |
+| **Reliability** | The SDK retries transient API errors (2 retries by default). Server-side model fallback on refusals. A failed briefing records its error rather than hanging. |
+| **Security** | Secrets only in server environment variables. Mobile app holds only the Supabase anon key. JWT verified on every API call. RLS on all tables. `.env` files are git-ignored. |
+| **Compliance** | Neutral house rules, a dedicated compliance agent, banned-phrase checks, a fixed disclaimer and an "internal use only" label. |
+| **Data provenance** | Financial figures from SEC XBRL; risk evidence quoted verbatim; link to the source 10-K. |
+| **External limits** | SEC: ≤ 10 requests/second with a descriptive User-Agent. Finnhub free tier rate limits apply. |
+
+---
+
+## 11. Configuration
+
+**Server (`server/.env`)**
+| Variable | Purpose |
+|---|---|
+| `PORT` | API port (default 3001) |
+| `ANTHROPIC_API_KEY` | Claude API key |
+| `LLM_MODEL` | Agent model (default `claude-sonnet-5-5`) |
+| `EVAL_MODEL` | Judge model (default `claude-sonnet-5-5`) |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Database access |
+| `FINNHUB_API_KEY` | Quotes |
+| `SEC_USER_AGENT` | Required by SEC, e.g. `FinSight Research you@firm.com` |
+
+**Mobile (`mobile/.env`)**
+| Variable | Purpose |
+|---|---|
+| `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Auth |
+| `EXPO_PUBLIC_API_URL` | API base URL (a LAN IP or the Render URL, not `localhost`, on a phone) |
+
+---
+
+## 12. Deployment
+
+| Component | Target | How |
+|---|---|---|
+| Source | GitHub | Single monorepo |
+| API | Render web service | `render.yaml` blueprint: root `server/`, `npm install`, `npm start`, health check `/health`, Node 22 |
+| Database / auth | Supabase | Run `supabase/schema.sql`; enable email auth |
+| Mobile app | Expo Go (demo), web export to Vercel (optional), EAS build for app stores (future) | `npx expo start` / `npx expo export -p web` |
+
+---
+
+## 13. Known Limitations
+
+- Only SEC-registered US companies are supported.
+- Some companies (e.g. JPM, PFE, CVX) put MD&A in a separate annual-report exhibit. The outlook then reads "not available".
+- Companies with a new SEC registration and no 10-K yet (e.g. ExxonMobil's 2026 holding company) get briefings without 10-K text or XBRL history.
+- 10-K section extraction is heuristic (heading matching on HTML-to-text) and may miss unusual layouts.
+- Sections over the character caps are truncated, and the agent is told.
+- Briefings poll for status; there are no push notifications or realtime updates.
+- The Finnhub free tier limits request volume.
+- Advisor-specific views such as watchlists or a compliance dashboard are not built.
+
+---
+
+## 14. Future Roadmap
+
+| Priority | Item |
+|---|---|
+| P1 | Retrieval over filing chunks (pgvector) with claim-level citations and a citation-verifier agent |
+| P1 | "Chat with the filings" Q&A agent |
+| P1 | Pull MD&A from the Exhibit 13 annual report when it isn't in the 10-K body |
+| P2 | Year-over-year risk-factor diff (new, removed and expanded risks) |
+| P2 | Insider and ownership agent (Form 4, 13F) and peer-comparison agent |
+| P2 | Watchlists with scheduled re-briefing and alerts on new filings |
+| P2 | Supabase Realtime progress instead of polling; push notifications |
+| P3 | Admin dashboard: score trends, feedback vs. judge agreement, cost per briefing |
+| P3 | CI gate: run the golden-set eval on pull requests that change prompts or agents |
+| P3 | Export a briefing to PDF |
+
+---
+
+## 15. Acceptance Criteria (v1)
+
+1. A new user can sign up, sign in and sign out in the app.
+2. Entering `AAPL` produces a `complete` briefing in under 2 minutes, with every section in §2.2 populated.
+3. Financial figures in the app match SEC company-facts data for the same years.
+4. Each risk shows an evidence quote that appears in the 10-K text.
+5. An invalid ticker (e.g. `ZZZZZ`) produces a `failed` briefing with a readable error.
+6. Each briefing has an evaluation row with four scores, a rationale and checks, plus 7 `agent_logs` rows.
+7. User A cannot read user B's briefings through the API or directly through Supabase.
+8. `npm run eval` completes for the golden set and writes a results file.
+9. No briefing text matches the banned-phrase patterns.

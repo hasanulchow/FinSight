@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "FinSight",
+    "slug": "finsight",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0B1F3A"
+      }
+    }
+  }
+}

@@ -1,0 +1,9 @@
+node_modules/
+.env
+.env.local
+.expo/
+dist/
+web-build/
+server/evals/results/
+*.log
+.DS_Store

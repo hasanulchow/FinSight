@@ -1,0 +1,7 @@
+[
+  { "ticker": "AAPL", "expected_risk_keywords": ["supply", "competition", "China"] },
+  { "ticker": "MSFT", "expected_risk_keywords": ["competition", "cyber", "AI"] },
+  { "ticker": "JPM", "expected_risk_keywords": ["credit", "regulat", "interest rate"] },
+  { "ticker": "CVX", "expected_risk_keywords": ["price", "climate", "regulat"] },
+  { "ticker": "PFE", "expected_risk_keywords": ["patent", "regulat", "pricing"] }
+]
