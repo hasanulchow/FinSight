@@ -1,6 +1,8 @@
 import { runAgent } from "../lib/llm.js";
 import { config } from "../config.js";
 import { obj, str, int, arr } from "./schema.js";
+import { scanOutput } from "../lib/guardrails.js";
+import { narrativeOf } from "../lib/grounding.js";
 
 const score = (what) => int(`1-5 score for ${what} (5 = excellent)`);
 
@@ -25,16 +27,16 @@ export function evaluator({ briefing, sourceData, briefingId }) {
   });
 }
 
-const BANNED = [/\byou should (buy|sell|hold)\b/i, /\b(strong )?(buy|sell) (rating|recommendation)\b/i, /\bguarantee[ds]?\b/i, /\brisk[- ]free\b/i, /\bprice target\b/i, /\bwill (rise|soar|double|go up)\b/i];
-
-/** Deterministic checks that run on every briefing, free. */
-export function deterministicChecks(content) {
-  const text = JSON.stringify(content);
-  const bannedHits = BANNED.filter((re) => re.test(text)).map((re) => re.source);
+/** Deterministic checks that run on every briefing, free. `grounding` comes from lib/grounding.js. */
+export function deterministicChecks(content, grounding = {}) {
+  const scan = scanOutput(narrativeOf(content));
   const checks = {
     has_disclaimer: Boolean(content.disclaimer),
-    no_banned_phrases: bannedHits.length === 0,
-    banned_hits: bannedHits,
+    no_banned_phrases: scan.banned.length === 0,
+    banned_hits: scan.banned,
+    no_pii: scan.pii.length === 0,
+    evidence_verified: grounding.evidence?.rate == null ? true : grounding.evidence.rate >= 0.8,
+    numbers_grounded: grounding.numbers?.rate == null ? true : grounding.numbers.rate >= 0.8,
     has_quote: Boolean(content.snapshot?.price),
     quote_fresh: content.snapshot?.asOf ? Date.now() - Date.parse(content.snapshot.asOf) < 4 * 24 * 3600 * 1000 : false,
     has_financials: Object.values(content.financials ?? {}).some((s) => s.length > 0),

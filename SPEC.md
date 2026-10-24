@@ -431,3 +431,47 @@ Scores are clamped to integers from 1 to 5. `overall` is the mean of the four, t
 7. User A cannot read user B's briefings through the API or directly through Supabase.
 8. `npm run eval` completes for the golden set and writes a results file.
 9. No briefing text matches the banned-phrase patterns.
+
+---
+
+## 16. v1.1 Additions: Embeddings, Memory, Guardrails, Extended Evaluation
+
+Schema: `supabase/002_memory_guardrails_embeddings.sql` (run after `schema.sql`).
+
+### 16.1 Embeddings and retrieval
+- **Indexing:** during each briefing, in parallel with the analysts, 10-K Items 1, 1A and 7 are chunked (~1,500 chars, sentence-boundary overlap) and embedded with Voyage AI `voyage-4` (1024 dims, `input_type: document`). They're stored in `filing_chunks` (pgvector, HNSW cosine index, unique `(source_url, section, chunk_index)`).
+- **Caching:** each filing is indexed once and shared across users. Older briefings are indexed on demand on the first question.
+- **Search:** the `match_filing_chunks(query_embedding, filing_url, match_count)` SQL function, with `input_type: query`. Without `VOYAGE_API_KEY`, search falls back to TF-IDF keyword scoring.
+
+### 16.2 Memory
+| Kind | Storage | Used by |
+|---|---|---|
+| Advisor memory (`preference`, `note`, `client_context`; optional ticker; ≤ 500 chars; ≤ 50 per user) | `advisor_memories` | Briefing Writer (emphasis only, fenced as data) |
+| Research memory (previous completed briefing on the same ticker) | `briefings` | Briefing Writer → new field `changes_since_last[]` |
+| Conversation memory (last 12 turns) | `chat_messages` | Filing Q&A (follow-up resolution, retrieval query expansion) |
+
+### 16.3 Guardrails
+| Stage | Rule | Action |
+|---|---|---|
+| Input | Rate limit (briefings and questions per user per hour) | 429 |
+| Input | Prompt injection (pattern set) | 400, logged |
+| Input | PII: SSN, Luhn-valid card numbers, account numbers, emails, phones | Redacted before storage or LLM use |
+| Input | Advice or prediction request | Neutral answer; agent declines the opinion |
+| Retrieval | Passages fenced as data; instruction-like passages flagged | Logged |
+| Output | Sentences still matching banned patterns after the Compliance Reviewer | Removed (evidence quotes exempt) |
+| Output | PII in generated answers | Flagged |
+
+All actions are recorded in `guardrail_events (stage, rule, action, detail)`.
+
+### 16.4 Extended evaluation
+- **Evidence match:** risk evidence quotes found in the 10-K (exact or ≥ 70% 5-gram overlap).
+- **Numeric grounding:** narrative numbers matched to XBRL values, quote values, derived growth rates and margins, or numbers in the 10-K text (2% / 0.6 pt tolerance).
+- Both feed `deterministicChecks` (`evidence_verified`, `numbers_grounded` at ≥ 0.8) and `evaluations.grounding`.
+- **Q&A:** citation validity plus an LLM judge (faithfulness, relevance, compliance), saved on each answer's `chat_messages.evaluation`.
+- **`GET /evals/summary`:** averages for briefings and Q&A, grounding rates, guardrail counts by rule and stage, and judge-vs-advisor feedback agreement.
+
+### 16.5 New endpoints
+`POST /briefings/:id/ask`, `GET /briefings/:id/chat`, `GET|POST /memory`, `DELETE /memory/:id`, `GET /evals/summary`.
+
+### 16.6 New configuration
+`VOYAGE_API_KEY` (optional), `EMBEDDING_MODEL` (default `voyage-4`), `BRIEFINGS_PER_HOUR` (20), `QUESTIONS_PER_HOUR` (60).

@@ -7,65 +7,97 @@ import { riskAnalyst } from "./riskAnalyst.js";
 import { briefingWriter } from "./briefingWriter.js";
 import { complianceReviewer, DISCLAIMER } from "./complianceReviewer.js";
 import { evaluator, deterministicChecks } from "./evaluator.js";
+import { memoriesForTicker, previousBriefing } from "../lib/memory.js";
+import { indexFiling } from "../lib/retrieval.js";
+import { enforceOutput, logGuardrail } from "../lib/guardrails.js";
+import { evidenceMatch, numericGrounding } from "../lib/grounding.js";
+import { embeddingsEnabled } from "../lib/embeddings.js";
 
 /**
  * Orchestrator: gathers data, then runs the agents.
  *
- *   tools (parallel) -> market | fundamentals | filings | risk (parallel)
- *   -> briefing writer -> compliance reviewer -> evaluator
+ *   tools (parallel) + memory -> market | fundamentals | filings | risk | filing index (parallel)
+ *   -> briefing writer (with memory) -> compliance reviewer -> output guardrail -> evaluation
  *
  * `progress(step)` is called as each stage starts so the app can show live status.
+ * `userId` enables memory and guardrail logging; offline evals run without it.
  */
-export async function runResearch({ ticker, briefingId = null, progress = async () => {} }) {
+export async function runResearch({ ticker, briefingId = null, userId = null, progress = async () => {} }) {
   await progress("Looking up company");
   const company = await lookupCompany(ticker);
   if (!company) throw new Error(`Unknown ticker "${ticker}". Only SEC-registered US companies are supported.`);
 
-  // 1. Data gathering (tools, no LLM)
+  // 1. Data gathering (tools, no LLM) + memory recall
   await progress("Fetching quote, financials and SEC filings");
-  const [quote, filingData, financials] = await Promise.all([
+  const [quote, filingData, financials, memories, previous] = await Promise.all([
     getQuote(company.ticker),
     getRecentFilings(company.cik),
     getFinancials(company.cik),
+    userId ? memoriesForTicker(userId, company.ticker) : [],
+    userId ? previousBriefing(userId, company.ticker, briefingId) : null,
   ]);
   const latest10K = filingData.latest10K;
   await progress("Reading the latest 10-K");
   const sections = latest10K ? await get10KSections(latest10K.url).catch(() => null) : null;
 
-  // 2. Specialist agents in parallel
+  // 2. Specialist agents in parallel, while the 10-K is chunked and embedded for follow-up questions
   await progress("Analysts at work: market, fundamentals, filings, risks");
-  const [market, fundamentals, filings, risks] = await Promise.all([
+  const indexing = indexFiling({ sourceUrl: latest10K?.url, ticker: company.ticker, cik: company.cik, sections }).catch((err) => {
+    console.error(`Indexing ${latest10K?.url} failed:`, err.message); // Q&A falls back to indexing on demand
+    return 0;
+  });
+  const [market, fundamentals, filings, risks, indexedChunks] = await Promise.all([
     marketAnalyst({ company, quote, briefingId }),
     fundamentalsAnalyst({ company, financials, briefingId }),
     filingsAnalyst({ company, filings: filingData.filings, sections, briefingId }),
     riskAnalyst({ company, riskFactors: sections?.riskFactors, briefingId }),
+    indexing,
   ]);
 
-  // 3. Synthesis, then compliance review
+  // 3. Synthesis (with advisor memory and the previous briefing), then compliance review
   await progress("Writing the briefing");
-  const draft = await briefingWriter({ company, analyses: { market, fundamentals, filings, risks }, briefingId });
+  const draft = await briefingWriter({ company, analyses: { market, fundamentals, filings, risks }, memories, previous, briefingId });
 
   await progress("Compliance review");
   const reviewed = await complianceReviewer({ draft, briefingId });
+
+  // 4. Output guardrail: drop any sentence that still breaks the rules (risk evidence quotes are verbatim, so untouched)
+  const guarded = enforceOutput({
+    revised: reviewed.revised,
+    market,
+    fundamentals,
+    business: filings,
+    risks: { overview: risks.overview, summaries: risks.top_risks.map((r) => r.summary) },
+  });
+  const g = guarded.value;
+  if (guarded.removed.length && userId) {
+    await logGuardrail({ userId, briefingId, stage: "output", rule: "banned_phrase", action: "removed", detail: { sentences: guarded.removed } });
+  }
 
   const content = {
     company: { ...company, industry: quote.industry, exchange: quote.exchange, logo: quote.logo },
     snapshot: quote,
     financials, // straight from SEC XBRL, never LLM-generated
-    ...reviewed.revised,
-    market,
-    fundamentals,
-    business: filings,
-    risks,
+    ...g.revised,
+    market: g.market,
+    fundamentals: g.fundamentals,
+    business: g.business,
+    risks: { overview: g.risks.overview, top_risks: risks.top_risks.map((r, i) => ({ ...r, summary: g.risks.summaries[i] })) },
     sources: { latest10K: latest10K?.url ?? null, filings: filingData.filings },
-    compliance: { issues_found: reviewed.issues_found },
+    compliance: { issues_found: reviewed.issues_found, guardrail_removed: guarded.removed },
+    memory: { advisor_memories_used: memories.length, previous_briefing_date: previous?.date ?? null },
+    retrieval: { indexed_chunks: indexedChunks, method: embeddingsEnabled() ? "vector" : "keyword" },
     disclaimer: DISCLAIMER,
   };
 
-  // 4. Evaluation: deterministic checks + LLM-as-judge against the raw source data
+  // 5. Evaluation: grounding metrics + deterministic checks + LLM-as-judge against the raw source data
   await progress("Evaluating quality");
   const sourceData = { quote, financials, filings: filingData.filings, tenK: sections };
-  const checks = deterministicChecks(content);
+  const grounding = {
+    evidence: evidenceMatch(risks.top_risks, sections?.riskFactors?.text),
+    numbers: numericGrounding(content, sourceData),
+  };
+  const checks = deterministicChecks(content, grounding);
   const judge = await evaluator({ briefing: content, sourceData, briefingId });
 
   const clamp = (n) => Math.min(5, Math.max(1, Math.round(n)));
@@ -81,6 +113,7 @@ export async function runResearch({ ticker, briefingId = null, progress = async 
     rationale: judge.rationale,
     issues: judge.unsupported_claims,
     checks,
+    grounding,
   };
 
   return { company, sourceData: { quote, financials, filings: filingData.filings, latest10K: latest10K?.url ?? null }, content, evaluation };

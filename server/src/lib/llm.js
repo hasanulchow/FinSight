@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { config } from "../config.js";
 import { supabase } from "./supabase.js";
+import { localStore } from "./localStore.js";
 
 const client = new Anthropic(); // reads ANTHROPIC_API_KEY
 
@@ -47,6 +48,7 @@ export async function runAgent({ agent, system, prompt, schema, briefingId, mode
 
 async function logAgent({ briefingId, ...row }) {
   if (!briefingId) return; // offline eval runs without a briefing row
+  if (config.localMode) return localStore.insertAgentLog({ briefing_id: briefingId, ...row });
   const { error } = await supabase().from("agent_logs").insert({ briefing_id: briefingId, ...row });
   if (error) console.error("agent_logs insert failed:", error.message);
 }

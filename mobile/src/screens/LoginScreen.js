@@ -5,6 +5,16 @@ import { supabase } from "../lib/supabase";
 import { colors } from "../theme";
 import { PrimaryButton } from "../components/ui";
 
+function friendlyAuthError(error) {
+  const text = error.message || "";
+  if (/failed to fetch|network request failed|load failed/i.test(text)) return "Can't reach Supabase. Check EXPO_PUBLIC_SUPABASE_URL and your connection.";
+  if (/invalid api key/i.test(text)) return "Supabase rejected the API key. Check EXPO_PUBLIC_SUPABASE_ANON_KEY.";
+  if (/email not confirmed/i.test(text)) return "Confirm your email first (check your inbox), then sign in.";
+  if (/invalid login credentials/i.test(text)) return "Wrong email or password.";
+  if (/rate limit/i.test(text)) return "Too many attempts. Wait a minute and try again.";
+  return text;
+}
+
 const FEATURES = [
   { icon: "flash-outline", color: "#F59E0B", text: "A full stock briefing in about a minute" },
   { icon: "document-text-outline", color: "#10B981", text: "Built from live quotes and SEC filings" },
@@ -24,12 +34,14 @@ export default function LoginScreen() {
     if (password.length < 6) return setMessage({ type: "error", text: "Passwords need at least 6 characters." });
     setBusy(true);
     setMessage(null);
+    // On web, the confirmation email links back to this site instead of Supabase's Site URL.
+    const emailRedirectTo = Platform.OS === "web" ? window.location.origin : undefined;
     const { data, error } =
       mode === "signin"
         ? await supabase.auth.signInWithPassword({ email: email.trim(), password })
-        : await supabase.auth.signUp({ email: email.trim(), password });
+        : await supabase.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo } });
     setBusy(false);
-    if (error) return setMessage({ type: "error", text: error.message });
+    if (error) return setMessage({ type: "error", text: friendlyAuthError(error) });
     if (mode === "signup" && !data.session) setMessage({ type: "info", text: "Almost there. Check your inbox to confirm your email, then sign in." });
   }
 

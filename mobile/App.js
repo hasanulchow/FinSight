@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
-import { supabase } from "./src/lib/supabase";
+import { LOCAL_SESSION, localMode, supabase } from "./src/lib/supabase";
 import { colors } from "./src/theme";
 import LoginScreen from "./src/screens/LoginScreen";
 import HomeScreen from "./src/screens/HomeScreen";
@@ -13,6 +13,7 @@ export default function App() {
   const [openBriefingId, setOpenBriefingId] = useState(null);
 
   useEffect(() => {
+    if (localMode) return setSession(LOCAL_SESSION);
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
     const { data } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
     return () => data.subscription.unsubscribe();

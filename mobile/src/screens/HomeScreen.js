@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../lib/api";
-import { supabase } from "../lib/supabase";
+import { localMode, supabase } from "../lib/supabase";
 import { colors, scoreColor, scoreLabel } from "../theme";
 import { PrimaryButton, TickerAvatar } from "../components/ui";
 
@@ -57,9 +57,11 @@ export default function HomeScreen({ email, onOpen }) {
             <Text style={styles.greeting}>{greeting()} 👋</Text>
             <Text style={styles.email} numberOfLines={1}>{email}</Text>
           </View>
-          <Pressable style={styles.signOut} onPress={() => supabase.auth.signOut()} accessibilityLabel="Sign out">
-            <Ionicons name="log-out-outline" size={20} color={colors.white} />
-          </Pressable>
+          {!localMode && (
+            <Pressable style={styles.signOut} onPress={() => supabase.auth.signOut()} accessibilityLabel="Sign out">
+              <Ionicons name="log-out-outline" size={20} color={colors.white} />
+            </Pressable>
+          )}
         </View>
         <Text style={styles.heroTitle}>Which stock are you discussing today?</Text>
       </View>

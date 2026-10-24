@@ -32,6 +32,8 @@ for (const c of cases) {
       clarity: evaluation.clarity,
       overall: evaluation.overall,
       checks: `${evaluation.checks.passed}/${evaluation.checks.total}`,
+      evidence: evaluation.grounding.evidence.rate ?? "-",
+      numbers: evaluation.grounding.numbers.rate ?? "-",
       risk_recall: riskRecall === null ? "-" : `${Math.round(riskRecall * 100)}%`,
       secs: Math.round((Date.now() - started) / 1000),
     });

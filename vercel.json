@@ -10,6 +10,9 @@
   "rewrites": [
     { "source": "/health", "destination": "/api" },
     { "source": "/briefings", "destination": "/api" },
-    { "source": "/briefings/:path*", "destination": "/api" }
+    { "source": "/briefings/:path*", "destination": "/api" },
+    { "source": "/memory", "destination": "/api" },
+    { "source": "/memory/:path*", "destination": "/api" },
+    { "source": "/evals/:path*", "destination": "/api" }
   ]
 }
