@@ -113,7 +113,7 @@ Every briefing is automatically quality-scored, so advisors and the firm can see
 
 ```
 ┌──────────────────────┐   Supabase JWT    ┌──────────────────────────────────────┐
-│  Expo React Native   ├──────────────────►│  Node.js API (Express) on Render     │
+│  Expo React Native   ├──────────────────►│  Node.js API (Express) on Vercel     │
 │  app (iOS/Android/   │◄──────────────────┤                                      │
 │  web)                │   JSON + polling  │  Orchestrator                        │
 └─────────┬────────────┘                   │   ├─ Data tools ──► SEC EDGAR        │
@@ -138,7 +138,7 @@ Every briefing is automatically quality-scored, so advisors and the firm can see
 | Database / auth | Supabase Postgres and Supabase Auth |
 | Market data | Finnhub REST API (quote, metrics, company profile) |
 | Filings data | SEC EDGAR (`company_tickers.json`, submissions API, XBRL company-facts API, filing documents) |
-| Hosting | Render (API), Expo Go / static web export (app), GitHub (source) |
+| Hosting | Vercel (web app on CDN + API as a serverless function), Expo Go (native demo), GitHub (source) |
 
 ### 4.2 Repository layout
 ```
@@ -157,7 +157,7 @@ Every briefing is automatically quality-scored, so advisors and the firm can see
 │   │   └── agents/         7 agents, orchestrator.js, schema.js
 │   └── evals/              run.js, golden.json, results/
 ├── supabase/schema.sql
-├── render.yaml
+├── vercel.json, api/index.js
 ├── README.md
 └── SPEC.md
 ```
@@ -261,7 +261,7 @@ The request fails if no price is returned.
 
 ## 7. API Specification
 
-Base URL: Render service URL (local: `http://localhost:3001`). All routes except `/health` require `Authorization: Bearer <Supabase access token>`, verified with `supabase.auth.getUser`.
+Base URL: Vercel deployment URL (local: `http://localhost:3001`). All routes except `/health` require `Authorization: Bearer <Supabase access token>`, verified with `supabase.auth.getUser`.
 
 | Method | Path | Request | Response |
 |---|---|---|---|
@@ -375,7 +375,7 @@ Scores are clamped to integers from 1 to 5. `overall` is the mean of the four, t
 | Variable | Purpose |
 |---|---|
 | `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Auth |
-| `EXPO_PUBLIC_API_URL` | API base URL (a LAN IP or the Render URL, not `localhost`, on a phone) |
+| `EXPO_PUBLIC_API_URL` | API base URL (a LAN IP or the Vercel URL, not `localhost`, on a phone) |
 
 ---
 
@@ -384,9 +384,9 @@ Scores are clamped to integers from 1 to 5. `overall` is the mean of the four, t
 | Component | Target | How |
 |---|---|---|
 | Source | GitHub | Single monorepo |
-| API | Render web service | `render.yaml` blueprint: root `server/`, `npm install`, `npm start`, health check `/health`, Node 22 |
+| Web app + API | Vercel (one project) | `vercel.json`: installs `server/` and `mobile/`, builds the Expo web export to `mobile/dist` (CDN), runs the Express API as the `api/index.js` function (rewrites for `/health` and `/briefings/*`, `maxDuration` 300 s, agents kept alive with `waitUntil`), Node 22 |
 | Database / auth | Supabase | Run `supabase/schema.sql`; enable email auth |
-| Mobile app | Expo Go (demo), web export to Vercel (optional), EAS build for app stores (future) | `npx expo start` / `npx expo export -p web` |
+| Native app | Expo Go (demo), EAS build for app stores (future) | `npx expo start` with `EXPO_PUBLIC_API_URL` set to the Vercel URL |
 
 ---
 

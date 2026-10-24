@@ -2,12 +2,12 @@
 
 Advisors type a ticker and get a briefing in about a minute: live quote, multi-year financials from SEC XBRL data, a business and MD&A summary from the latest 10-K, top risk factors, recent filings, client talking points and a compliance-safe disclaimer. Every briefing is scored by an LLM judge plus automated checks.
 
-**Stack:** React Native (Expo) · Node.js (Express) · Claude Sonnet 5.5 · Supabase (Postgres + Auth) · SEC EDGAR · Finnhub · Render
+**Stack:** React Native (Expo) · Node.js (Express) · Claude Sonnet 5.5 · Supabase (Postgres + Auth) · SEC EDGAR · Finnhub · Vercel
 
 ## Architecture
 
 ```
-Expo app ──(Supabase JWT)──► Node API on Render ──► SEC EDGAR, Finnhub (data tools)
+Expo app ──(Supabase JWT)──► Node API on Vercel ──► SEC EDGAR, Finnhub (data tools)
    │                              │
    └── Supabase Auth              ├──► Claude API (7 agents)
                                   └──► Supabase Postgres (briefings, evaluations, agent_logs, feedback)
@@ -77,7 +77,7 @@ npm install
 npx expo install --fix    # aligns native package versions with the installed Expo SDK
 npx expo start            # scan the QR code with Expo Go
 ```
-On a phone, `localhost` refers to the phone itself. Set `EXPO_PUBLIC_API_URL` to your computer's LAN IP (e.g. `http://192.168.1.20:3001`) or to the Render URL.
+On a phone, `localhost` refers to the phone itself. Set `EXPO_PUBLIC_API_URL` to your computer's LAN IP (e.g. `http://192.168.1.20:3001`) or to the Vercel URL.
 
 ### 5. Offline eval
 ```bash
@@ -88,8 +88,9 @@ npm run eval -- NVDA      # one ticker
 
 ## Deploy
 
-- **Web app + API → Render (one service):** push to GitHub, then on Render choose New → Blueprint and select the repo (`render.yaml`). Fill in the secret environment variables, including `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` (baked into the web bundle). The build exports the Expo web app to `mobile/dist` and the API serves it on the same origin, so `EXPO_PUBLIC_API_URL` is not needed for web.
-- **Native app (later):** set `EXPO_PUBLIC_API_URL` to the Render URL, then demo through Expo Go or build with EAS (`eas build`).
+- **Web app + API → Vercel (one project):** import the GitHub repo on vercel.com and keep the root directory as the repo root; `vercel.json` sets everything else. The build exports the Expo web app to `mobile/dist` (served from Vercel's CDN), and `api/index.js` runs the Express API as a serverless function. `/health` and `/briefings/*` are rewritten to it, so the app and API share one origin and `EXPO_PUBLIC_API_URL` isn't needed for web. Add the server variables and `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` (baked into the web bundle at build time) under Project Settings → Environment Variables.
+- **Background agents on Vercel:** `POST /briefings` responds immediately and keeps the function alive with `waitUntil` until the agents finish, up to `maxDuration` (300 s in `vercel.json`, which needs Fluid compute: on by default for new projects).
+- **Native app (later):** set `EXPO_PUBLIC_API_URL` to the Vercel URL, then demo through Expo Go or build with EAS (`eas build`).
 
 ## API
 

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "npm ci --prefix server && npm ci --prefix mobile",
+  "buildCommand": "npm run build:web --prefix mobile",
+  "outputDirectory": "mobile/dist",
+  "functions": {
+    "api/index.js": { "maxDuration": 300 }
+  },
+  "rewrites": [
+    { "source": "/health", "destination": "/api" },
+    { "source": "/briefings", "destination": "/api" },
+    { "source": "/briefings/:path*", "destination": "/api" }
+  ]
+}

@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { waitUntil } from "@vercel/functions";
 import { config } from "./config.js";
 import { supabase } from "./lib/supabase.js";
 import { requireUser } from "./lib/auth.js";
@@ -13,7 +14,7 @@ app.use(express.json());
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
-// Serves the Expo web build (mobile/dist) when it exists, so one Render service hosts app + API.
+// Local dev: serves the Expo web build (mobile/dist) when it exists. On Vercel the CDN serves it.
 const webDist = fileURLToPath(new URL("../../mobile/dist", import.meta.url));
 if (existsSync(webDist)) app.use(express.static(webDist));
 
@@ -33,7 +34,9 @@ app.post("/briefings", requireUser, async (req, res) => {
   if (error) return res.status(500).json({ error: error.message });
 
   res.status(202).json({ id: row.id });
-  processBriefing(row.id, ticker);
+  // On Vercel, waitUntil keeps the function alive after the response until the agents finish
+  // (bounded by maxDuration in vercel.json). Locally it just lets the promise run.
+  waitUntil(processBriefing(row.id, ticker));
 });
 
 async function processBriefing(id, ticker) {
@@ -97,4 +100,9 @@ app.post("/briefings/:id/feedback", requireUser, async (req, res) => {
   res.json({ ok: true });
 });
 
-app.listen(config.port, () => console.log(`FinSight API listening on :${config.port}`));
+// Vercel imports the app as a function (api/index.js); everywhere else, run a normal server.
+if (!process.env.VERCEL) {
+  app.listen(config.port, () => console.log(`FinSight API listening on :${config.port}`));
+}
+
+export default app;
