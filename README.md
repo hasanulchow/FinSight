@@ -2,12 +2,12 @@
 
 Advisors type a ticker and get a briefing in about a minute: live quote, multi-year financials from SEC XBRL data, a business and MD&A summary from the latest 10-K, top risk factors, recent filings, client talking points and a compliance-safe disclaimer. Every briefing is scored by an LLM judge plus automated checks.
 
-**Stack:** React Native (Expo) · Node.js (Express) · Claude Sonnet 5.5 · Supabase (Postgres + Auth) · SEC EDGAR · Finnhub · Vercel
+**Stack:** React Native (Expo) · Node.js (Express) · Claude Sonnet 5.5 · Supabase (Postgres + Auth) · SEC EDGAR · Finnhub · Render
 
 ## Architecture
 
 ```
-Expo app ──(Supabase JWT)──► Node API on Vercel ──► SEC EDGAR, Finnhub (data tools)
+Expo app ──(Supabase JWT)──► Node API on Render ──► SEC EDGAR, Finnhub (data tools)
    │                              │
    └── Supabase Auth              ├──► Claude API (7 agents)
                                   └──► Supabase Postgres (briefings, evaluations, agent_logs, feedback)
@@ -90,7 +90,8 @@ Every action is written to `guardrail_events` as an audit trail.
 1. Create a project at supabase.com.
 2. In the SQL editor, run `supabase/schema.sql`, then `supabase/002_memory_guardrails_embeddings.sql` (pgvector, memory, chat, guardrail log).
 3. Authentication → Providers → Email: enabled. For a quick demo, turn off "Confirm email".
-4. Project Settings → API: copy the URL, the anon key and the service-role key.
+4. Authentication → URL Configuration: set Site URL to your deployed URL (e.g. `https://finsight.onrender.com`) and add it plus `http://localhost:3001` under Redirect URLs, so confirmation emails link back to the app.
+5. Project Settings → API: copy the URL, the anon key and the service-role key.
 
 ### 2. API keys
 - Anthropic: console.anthropic.com → API keys
@@ -124,7 +125,8 @@ npm run eval -- NVDA      # one ticker
 
 ## Deploy
 
-- **Web app + API → Vercel (one project):** import the GitHub repo on vercel.com and keep the root directory as the repo root; `vercel.json` sets everything else. The build exports the Expo web app to `mobile/dist` (served from Vercel's CDN), and `api/index.js` runs the Express API as a serverless function. `/health`, `/briefings/*`, `/memory/*` and `/evals/*` are rewritten to it, so the app and API share one origin and `EXPO_PUBLIC_API_URL` isn't needed for web. Add the server variables and `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` (baked into the web bundle at build time) under Project Settings → Environment Variables.
+- **Web app + API → Render (one service, recommended):** push to GitHub, then on render.com choose New → Blueprint and select the repo (`render.yaml`). Fill in the secrets when prompted: the server keys plus `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY`, which are baked into the web bundle at build time (change them → Manual Deploy → Clear build cache & deploy). The build exports the Expo web app to `mobile/dist` and Express serves it on the same origin as the API. The blueprint uses the Starter plan because agents run after the response returns and a sleeping free instance can cut a briefing off. Local mode never turns on on Render (`RENDER` is set), so missing Supabase keys fail closed.
+- **Alternative: Vercel (one project):** import the GitHub repo on vercel.com and keep the root directory as the repo root; `vercel.json` sets everything else. The build exports the Expo web app to `mobile/dist` (served from Vercel's CDN), and `api/index.js` runs the Express API as a serverless function. `/health`, `/briefings/*`, `/memory/*` and `/evals/*` are rewritten to it, so the app and API share one origin and `EXPO_PUBLIC_API_URL` isn't needed for web. Add the server variables and `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` (baked into the web bundle at build time) under Project Settings → Environment Variables.
 - **Background agents on Vercel:** `POST /briefings` responds immediately and keeps the function alive with `waitUntil` until the agents finish, up to `maxDuration` (300 s in `vercel.json`, which needs Fluid compute: on by default for new projects).
 - **Native app (later):** set `EXPO_PUBLIC_API_URL` to the Vercel URL, then demo through Expo Go or build with EAS (`eas build`).
 

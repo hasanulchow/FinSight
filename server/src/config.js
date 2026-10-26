@@ -22,8 +22,8 @@ export const config = {
   briefingsPerHour: Number(process.env.BRIEFINGS_PER_HOUR || 20),
   questionsPerHour: Number(process.env.QUESTIONS_PER_HOUR || 60),
   // No Supabase on a dev machine: skip auth and keep data in memory (lib/localStore.js).
-  // Never on Vercel or in production, so a missing env var can't open up a deployed API.
-  localMode: !process.env.SUPABASE_URL && !process.env.VERCEL && process.env.NODE_ENV !== "production",
+  // Never on Vercel, Render or in production, so a missing env var can't open up a deployed API.
+  localMode: !process.env.SUPABASE_URL && !process.env.VERCEL && !process.env.RENDER && process.env.NODE_ENV !== "production",
 };
 
 // Keys the research pipeline can't run without (checked before a briefing starts).

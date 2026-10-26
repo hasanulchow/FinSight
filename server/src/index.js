@@ -281,6 +281,9 @@ if (!process.env.VERCEL) {
   app.listen(config.port, () => {
     console.log(`FinSight API listening on :${config.port}`);
     if (config.localMode) console.log("Local mode: no SUPABASE_URL, so auth is skipped and data is kept in memory.");
+    else if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required here: every authenticated request will fail until they are set.");
+    }
     const missing = missingResearchKeys();
     if (missing.length) console.warn(`Agents disabled until these are set: ${missing.join(", ")}`);
   });

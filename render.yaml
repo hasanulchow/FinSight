@@ -1,0 +1,42 @@
+# Render blueprint: New -> Blueprint -> select this repo. Fill the secret env vars when prompted.
+# One service: builds the Expo web app (mobile/dist) and serves it from the Express API on the same origin.
+services:
+  - type: web
+    name: finsight
+    runtime: node
+    plan: starter # agents run in the background after the response; free instances can sleep mid-briefing
+    buildCommand: npm ci --prefix server && npm ci --prefix mobile && npm run build:web --prefix mobile
+    startCommand: npm start --prefix server
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: LLM_MODEL
+        value: claude-sonnet-5-5
+      - key: EVAL_MODEL
+        value: claude-sonnet-5-5
+      - key: EMBEDDING_MODEL
+        value: voyage-4
+      - key: BRIEFINGS_PER_HOUR
+        value: "20"
+      - key: QUESTIONS_PER_HOUR
+        value: "60"
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: FINNHUB_API_KEY
+        sync: false
+      - key: SEC_USER_AGENT
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: VOYAGE_API_KEY # optional: without it, filing search uses keyword matching
+        sync: false
+      # Baked into the web bundle at build time: Supabase URL + anon/publishable key only
+      - key: EXPO_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: EXPO_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
