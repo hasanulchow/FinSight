@@ -35,6 +35,12 @@ services:
         sync: false
       - key: VOYAGE_API_KEY # optional: without it, filing search uses keyword matching
         sync: false
+      - key: MASSIVE_API_KEY # price history for technical analysis, screener and indicator alerts (Massive, formerly Polygon.io)
+        sync: false
+      - key: JOBS_INTERVAL_MINUTES # alerts, screener refresh and daily digests run in-process on this schedule
+        value: "10"
+      - key: CRON_SECRET # protects POST /jobs/run for external schedulers
+        generateValue: true
       # Baked into the web bundle at build time: Supabase URL + anon/publishable key only
       - key: EXPO_PUBLIC_SUPABASE_URL
         sync: false

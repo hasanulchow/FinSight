@@ -34,4 +34,32 @@ export const api = {
   listBriefings: () => request("/briefings"),
   getBriefing: (id) => request(`/briefings/${id}`),
   sendFeedback: (id, rating) => request(`/briefings/${id}/feedback`, { method: "POST", body: JSON.stringify({ rating }) }),
+
+  // Filing Q&A
+  ask: (id, question) => request(`/briefings/${id}/ask`, { method: "POST", body: JSON.stringify({ question }) }),
+  chat: (id) => request(`/briefings/${id}/chat`),
+
+  // Technical analysis, earnings & insiders
+  technicals: (ticker, { explain = false, days = 252 } = {}) => request(`/stocks/${encodeURIComponent(ticker)}/technicals?days=${days}${explain ? "&explain=1" : ""}`),
+  events: (ticker) => request(`/stocks/${encodeURIComponent(ticker)}/events`),
+
+  // Alerts + notifications
+  alertTypes: () => request("/alerts/types"),
+  alerts: () => request("/alerts"),
+  createAlert: (alert) => request("/alerts", { method: "POST", body: JSON.stringify(alert) }),
+  updateAlert: (id, fields) => request(`/alerts/${id}`, { method: "PATCH", body: JSON.stringify(fields) }),
+  deleteAlert: (id) => request(`/alerts/${id}`, { method: "DELETE" }),
+  notifications: () => request("/notifications"),
+  markRead: (id = "all") => request(`/notifications/${id}/read`, { method: "POST" }),
+  registerPush: (token, platform) => request("/push/register", { method: "POST", body: JSON.stringify({ token, platform }) }),
+
+  // Screener
+  screen: (query) => request("/screener", { method: "POST", body: JSON.stringify({ query }) }),
+
+  // Portfolio
+  holdings: () => request("/portfolio"),
+  importCsv: (csv, mode = "merge") => request("/portfolio/import", { method: "POST", body: JSON.stringify({ csv, mode }) }),
+  addHolding: (holding) => request("/portfolio/holdings", { method: "POST", body: JSON.stringify(holding) }),
+  deleteHolding: (id) => request(`/portfolio/holdings/${id}`, { method: "DELETE" }),
+  xray: ({ analysis = true } = {}) => request(`/portfolio/xray${analysis ? "" : "?analysis=0"}`),
 };

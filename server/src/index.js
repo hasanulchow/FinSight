@@ -13,6 +13,8 @@ import { checkInput, checkRateLimit, enforceOutput, logGuardrail, scanOutput, sc
 import { MEMORY_KINDS, addMemory, chatHistory, deleteMemory, listMemories, saveChatMessage, updateChatMessage } from "./lib/memory.js";
 import { indexFiling, searchFiling } from "./lib/retrieval.js";
 import { evalSummary } from "./lib/evalSummary.js";
+import { registerTradingRoutes } from "./routes/trading.js";
+import { startScheduler } from "./lib/jobs.js";
 
 const app = express();
 app.use(cors());
@@ -276,10 +278,15 @@ app.get("/evals/summary", requireUser, async (req, res) => {
   }
 });
 
+// Technical analysis, alerts, screener, earnings & insiders, portfolio, scheduled jobs
+registerTradingRoutes(app);
+
 // Vercel imports the app as a function (api/index.js); everywhere else, run a normal server.
 if (!process.env.VERCEL) {
   app.listen(config.port, () => {
     console.log(`FinSight API listening on :${config.port}`);
+    startScheduler();
+    if (!config.pricesKey) console.warn("Technical analysis, screener technicals and indicator alerts are off until MASSIVE_API_KEY is set.");
     if (config.localMode) console.log("Local mode: no SUPABASE_URL, so auth is skipped and data is kept in memory.");
     else if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
       console.error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required here: every authenticated request will fail until they are set.");

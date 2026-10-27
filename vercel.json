@@ -13,6 +13,20 @@
     { "source": "/briefings/:path*", "destination": "/api" },
     { "source": "/memory", "destination": "/api" },
     { "source": "/memory/:path*", "destination": "/api" },
-    { "source": "/evals/:path*", "destination": "/api" }
+    { "source": "/evals/:path*", "destination": "/api" },
+    { "source": "/stocks/:path*", "destination": "/api" },
+    { "source": "/alerts", "destination": "/api" },
+    { "source": "/alerts/:path*", "destination": "/api" },
+    { "source": "/notifications", "destination": "/api" },
+    { "source": "/notifications/:path*", "destination": "/api" },
+    { "source": "/push/:path*", "destination": "/api" },
+    { "source": "/screener", "destination": "/api" },
+    { "source": "/screener/:path*", "destination": "/api" },
+    { "source": "/portfolio", "destination": "/api" },
+    { "source": "/portfolio/:path*", "destination": "/api" },
+    { "source": "/jobs/:path*", "destination": "/api" }
+  ],
+  "crons": [
+    { "path": "/jobs/run", "schedule": "30 21 * * 1-5" }
   ]
 }

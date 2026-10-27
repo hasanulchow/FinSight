@@ -12,6 +12,9 @@ import { indexFiling } from "../lib/retrieval.js";
 import { enforceOutput, logGuardrail } from "../lib/guardrails.js";
 import { evidenceMatch, numericGrounding } from "../lib/grounding.js";
 import { embeddingsEnabled } from "../lib/embeddings.js";
+import { getDailyBars, pricesEnabled } from "../tools/prices.js";
+import { technicalSnapshot, chartSeries } from "../lib/indicators.js";
+import { technicalAnalyst } from "./technicalAnalyst.js";
 
 /**
  * Orchestrator: gathers data, then runs the agents.
@@ -29,34 +32,39 @@ export async function runResearch({ ticker, briefingId = null, userId = null, pr
 
   // 1. Data gathering (tools, no LLM) + memory recall
   await progress("Fetching quote, financials and SEC filings");
-  const [quote, filingData, financials, memories, previous] = await Promise.all([
+  const [quote, filingData, financials, memories, previous, bars] = await Promise.all([
     getQuote(company.ticker),
     getRecentFilings(company.cik),
     getFinancials(company.cik),
     userId ? memoriesForTicker(userId, company.ticker) : [],
     userId ? previousBriefing(userId, company.ticker, briefingId) : null,
+    // Technical analysis is optional: without a price-data key (or on a rate limit) the briefing skips it
+    pricesEnabled() ? getDailyBars(company.ticker).catch((err) => (console.error(`Price history for ${company.ticker}:`, err.message), null)) : null,
   ]);
+  const technical = bars?.length ? technicalSnapshot(bars) : null;
   const latest10K = filingData.latest10K;
   await progress("Reading the latest 10-K");
   const sections = latest10K ? await get10KSections(latest10K.url).catch(() => null) : null;
 
   // 2. Specialist agents in parallel, while the 10-K is chunked and embedded for follow-up questions
-  await progress("Analysts at work: market, fundamentals, filings, risks");
+  await progress(`Analysts at work: market, fundamentals, filings, risks${technical ? ", technicals" : ""}`);
   const indexing = indexFiling({ sourceUrl: latest10K?.url, ticker: company.ticker, cik: company.cik, sections }).catch((err) => {
     console.error(`Indexing ${latest10K?.url} failed:`, err.message); // Q&A falls back to indexing on demand
     return 0;
   });
-  const [market, fundamentals, filings, risks, indexedChunks] = await Promise.all([
+  const [market, fundamentals, filings, risks, technicalView, indexedChunks] = await Promise.all([
     marketAnalyst({ company, quote, briefingId }),
     fundamentalsAnalyst({ company, financials, briefingId }),
     filingsAnalyst({ company, filings: filingData.filings, sections, briefingId }),
     riskAnalyst({ company, riskFactors: sections?.riskFactors, briefingId }),
+    technical ? technicalAnalyst({ company, snapshot: technical, briefingId }) : null,
     indexing,
   ]);
 
   // 3. Synthesis (with advisor memory and the previous briefing), then compliance review
   await progress("Writing the briefing");
-  const draft = await briefingWriter({ company, analyses: { market, fundamentals, filings, risks }, memories, previous, briefingId });
+  const analyses = { market, fundamentals, filings, risks, ...(technicalView && { technicals: { rating: technical.rating, ...technicalView } }) };
+  const draft = await briefingWriter({ company, analyses, memories, previous, briefingId });
 
   await progress("Compliance review");
   const reviewed = await complianceReviewer({ draft, briefingId });
@@ -68,6 +76,7 @@ export async function runResearch({ ticker, briefingId = null, userId = null, pr
     fundamentals,
     business: filings,
     risks: { overview: risks.overview, summaries: risks.top_risks.map((r) => r.summary) },
+    technical: technicalView,
   });
   const g = guarded.value;
   if (guarded.removed.length && userId) {
@@ -83,6 +92,8 @@ export async function runResearch({ ticker, briefingId = null, userId = null, pr
     fundamentals: g.fundamentals,
     business: g.business,
     risks: { overview: g.risks.overview, top_risks: risks.top_risks.map((r, i) => ({ ...r, summary: g.risks.summaries[i] })) },
+    // Indicator values and chart come from code; only `analysis` is written by the Technical Analyst
+    technicals: technical ? { snapshot: technical, chart: chartSeries(bars), analysis: g.technical } : null,
     sources: { latest10K: latest10K?.url ?? null, filings: filingData.filings },
     compliance: { issues_found: reviewed.issues_found, guardrail_removed: guarded.removed },
     memory: { advisor_memories_used: memories.length, previous_briefing_date: previous?.date ?? null },
@@ -92,13 +103,15 @@ export async function runResearch({ ticker, briefingId = null, userId = null, pr
 
   // 5. Evaluation: grounding metrics + deterministic checks + LLM-as-judge against the raw source data
   await progress("Evaluating quality");
-  const sourceData = { quote, financials, filings: filingData.filings, tenK: sections };
+  const sourceData = { quote, financials, filings: filingData.filings, tenK: sections, technicals: technical };
   const grounding = {
     evidence: evidenceMatch(risks.top_risks, sections?.riskFactors?.text),
     numbers: numericGrounding(content, sourceData),
   };
   const checks = deterministicChecks(content, grounding);
-  const judge = await evaluator({ briefing: content, sourceData, briefingId });
+  // The judge doesn't need 180 chart points: it grades the analysis against the snapshot in sourceData
+  const forJudge = content.technicals ? { ...content, technicals: { analysis: content.technicals.analysis } } : content;
+  const judge = await evaluator({ briefing: forJudge, sourceData, briefingId });
 
   const clamp = (n) => Math.min(5, Math.max(1, Math.round(n)));
   const scores = {

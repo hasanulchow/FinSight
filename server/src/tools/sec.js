@@ -29,6 +29,7 @@ export async function getRecentFilings(cik, limit = 12) {
     filingDate: r.filingDate[i],
     reportDate: r.reportDate[i] || null,
     items: r.items[i] || null, // 8-K item codes, e.g. "2.02,9.01"
+    accession: r.accessionNumber[i],
     url: `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${r.accessionNumber[i].replace(/-/g, "")}/${r.primaryDocument[i]}`,
   });
 
@@ -140,4 +141,74 @@ export async function get10KSections(url) {
     riskFactors: extractSection(text, risk, heading(["1b", "unresolved"], ["1c", "cybersecurity"], ["2", "properties"]), 120000),
     mdna: extractSection(text, heading(["7", "management.s discussion"]), heading(["7a", "quantitative"], ["8", "financial statements"]), 80000),
   };
+}
+
+// ---------- Insider trading (Form 4) ----------
+
+const xmlValue = (block, tag) => {
+  const m = block.match(new RegExp(String.raw`<${tag}>\s*(?:<value>)?\s*([^<]*?)\s*(?:</value>)?\s*(?:<footnoteId[^>]*/>\s*)*</${tag}>`, "i"));
+  return m ? m[1].trim() : null;
+};
+
+const CODE_LABELS = { P: "buy", S: "sell", A: "grant", M: "option exercise", F: "tax withholding", G: "gift", D: "disposition to issuer", C: "conversion" };
+
+/**
+ * Recent insider transactions from Form 4 filings (non-derivative table only).
+ * Open-market buys (P) and sells (S) are what traders watch; grants and exercises are listed but flagged.
+ */
+export async function getInsiderTransactions(cik, { maxFilings = 15 } = {}) {
+  const data = await secFetch(`https://data.sec.gov/submissions/CIK${cik}.json`);
+  const r = data.filings.recent;
+  const filings = [];
+  for (let i = 0; i < r.form.length && filings.length < maxFilings; i++) {
+    if (r.form[i] !== "4") continue;
+    // primaryDocument points at the XSL-rendered view ("xslF345X05/x.xml"); the raw XML is the same file without the prefix
+    const doc = r.primaryDocument[i].replace(/^xslF345X\d+\//, "");
+    filings.push({ accession: r.accessionNumber[i], filingDate: r.filingDate[i], url: `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${r.accessionNumber[i].replace(/-/g, "")}/${doc}` });
+  }
+
+  const transactions = [];
+  // Small batches keep us well under SEC's 10 requests/second
+  for (let i = 0; i < filings.length; i += 4) {
+    const batch = await Promise.all(filings.slice(i, i + 4).map((f) => secFetch(f.url, "text").then((xml) => ({ f, xml })).catch(() => null)));
+    for (const item of batch.filter(Boolean)) {
+      const { f, xml } = item;
+      const owner = xmlValue(xml, "rptOwnerName");
+      const title = xmlValue(xml, "officerTitle") || (/<isDirector>\s*(1|true)/i.test(xml) ? "Director" : /<isTenPercentOwner>\s*(1|true)/i.test(xml) ? "10% owner" : null);
+      for (const block of xml.match(/<nonDerivativeTransaction>[\s\S]*?<\/nonDerivativeTransaction>/gi) ?? []) {
+        const code = xmlValue(block, "transactionCode");
+        const shares = Number(xmlValue(block, "transactionShares")) || 0;
+        const price = Number(xmlValue(block, "transactionPricePerShare")) || null;
+        transactions.push({
+          date: xmlValue(block, "transactionDate"),
+          filed: f.filingDate,
+          insider: owner,
+          title,
+          code,
+          type: CODE_LABELS[code] ?? code,
+          shares,
+          price,
+          value: price ? Math.round(shares * price) : null,
+          acquired: xmlValue(block, "transactionAcquiredDisposedCode") === "A",
+          accession: f.accession,
+        });
+      }
+    }
+  }
+  return transactions.sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+}
+
+// ---------- Earnings release (8-K Item 2.02, exhibit 99.1) ----------
+
+/** Text of the most recent earnings press release, or null. */
+export async function getLatestEarningsRelease(cik) {
+  const { filings } = await getRecentFilings(cik, 40);
+  const filing = filings.find((f) => f.form === "8-K" && f.items?.includes("2.02"));
+  if (!filing) return null;
+  const folder = filing.url.slice(0, filing.url.lastIndexOf("/"));
+  const index = await secFetch(`${folder}/index.json`).catch(() => null);
+  const exhibit = index?.directory?.item?.find((it) => /ex.?99/i.test(it.name) && /\.html?$/i.test(it.name));
+  if (!exhibit) return null;
+  const text = htmlToText(await secFetch(`${folder}/${exhibit.name}`, "text"));
+  return { filingDate: filing.filingDate, url: `${folder}/${exhibit.name}`, text: text.slice(0, 25000), truncated: text.length > 25000 };
 }

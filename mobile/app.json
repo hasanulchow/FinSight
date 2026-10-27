@@ -2,16 +2,27 @@
   "expo": {
     "name": "FinSight",
     "slug": "finsight",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "scheme": "finsight",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.finsight.app"
     },
     "android": {
+      "package": "com.finsight.app",
       "adaptiveIcon": {
-        "backgroundColor": "#0B1F3A"
+        "backgroundColor": "#4F46E5"
       }
-    }
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "color": "#4F46E5"
+        }
+      ]
+    ]
   }
 }

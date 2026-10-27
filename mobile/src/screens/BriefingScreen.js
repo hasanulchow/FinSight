@@ -4,13 +4,17 @@ import { Ionicons } from "@expo/vector-icons";
 import { api } from "../lib/api";
 import { colors, formatMoney, riskColors, scoreColor, scoreLabel, sections } from "../theme";
 import { Bullets, Pill, PrimaryButton, ScoreBar, SectionCard, TickerAvatar } from "../components/ui";
+import TechnicalsCard from "../components/TechnicalsCard";
+import EventsCard from "../components/EventsCard";
+import AskPanel from "../components/AskPanel";
+import AlertSheet from "../components/AlertSheet";
 
 // Pipeline steps, matched against the progress text the API writes (server/src/agents/orchestrator.js)
 const STEPS = [
   { match: "Looking up", label: "Finding the company", icon: "search-outline" },
   { match: "Fetching", label: "Pulling quote and SEC financials", icon: "cloud-download-outline" },
   { match: "Reading", label: "Reading the latest 10-K", icon: "book-outline" },
-  { match: "Analysts", label: "4 analysts at work", icon: "people-outline" },
+  { match: "Analysts", label: "Analysts at work (incl. technicals)", icon: "people-outline" },
   { match: "Writing", label: "Writing your briefing", icon: "create-outline" },
   { match: "Compliance", label: "Compliance review", icon: "shield-checkmark-outline" },
   { match: "Evaluating", label: "Scoring quality", icon: "ribbon-outline" },
@@ -19,6 +23,8 @@ const STEPS = [
 export default function BriefingScreen({ id, onBack }) {
   const [briefing, setBriefing] = useState(null);
   const [error, setError] = useState(null);
+  const [alertOpen, setAlertOpen] = useState(false);
+  const [alertCreated, setAlertCreated] = useState(false);
 
   // Poll while the agents are running
   useEffect(() => {
@@ -91,11 +97,23 @@ export default function BriefingScreen({ id, onBack }) {
         </View>
         {q.week52Low && q.week52High && <RangeBar low={q.week52Low} high={q.week52High} price={q.price} />}
         <Text style={styles.small}>Quote as of {new Date(q.asOf).toLocaleString()}</Text>
+        <Pressable style={styles.alertButton} onPress={() => setAlertOpen(true)}>
+          <Ionicons name={alertCreated ? "notifications" : "notifications-outline"} size={18} color={colors.primary} />
+          <Text style={styles.alertButtonText}>{alertCreated ? "Alert created · add another" : "Set a price, indicator or earnings alert"}</Text>
+        </Pressable>
       </View>
 
       <SectionCard title="Quick read" section={sections.summary} right={<Pill text="30 sec" color={sections.summary.color} />}>
         <Text style={styles.body}>{c.executive_summary}</Text>
       </SectionCard>
+
+      {c.changes_since_last?.length > 0 && (
+        <SectionCard title="Since your last look" section={{ color: "#0891B2", soft: "#CFFAFE", icon: "git-compare-outline" }}>
+          <Bullets items={c.changes_since_last} color="#0891B2" />
+        </SectionCard>
+      )}
+
+      {c.technicals && <TechnicalsCard snapshot={c.technicals.snapshot} chart={c.technicals.chart} analysis={c.technicals.analysis} />}
 
       <SectionCard title="Key takeaways" section={sections.takeaways}>
         <Bullets items={c.key_takeaways} color={sections.takeaways.color} />
@@ -174,7 +192,9 @@ export default function BriefingScreen({ id, onBack }) {
         )}
       </SectionCard>
 
-      <SectionCard title="Client talking points" section={sections.talking}>
+      <EventsCard ticker={c.company.ticker} />
+
+      <SectionCard title="Talking points" section={sections.talking}>
         <Bullets items={c.talking_points} color={sections.talking.color} />
       </SectionCard>
 
@@ -182,9 +202,13 @@ export default function BriefingScreen({ id, onBack }) {
         <Bullets items={c.questions_to_consider} color={sections.questions.color} />
       </SectionCard>
 
+      <AskPanel briefingId={briefing.id} />
+
       {evaluation && <QualityCard evaluation={evaluation} compliance={c.compliance} logs={briefing.agent_logs} />}
 
       <Feedback id={briefing.id} />
+
+      <AlertSheet ticker={c.company.ticker} price={q.price} visible={alertOpen} onClose={() => setAlertOpen(false)} onCreated={() => setAlertCreated(true)} />
 
       <View style={styles.disclaimer}>
         <Ionicons name="information-circle-outline" size={16} color={colors.muted} />
@@ -394,6 +418,8 @@ const cardShadow = { shadowColor: "#1E1B4B", shadowOpacity: 0.06, shadowRadius: 
 
 const styles = StyleSheet.create({
   back: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 6, alignSelf: "flex-start" },
+  alertButton: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 14, backgroundColor: colors.primarySoft, borderRadius: 12, padding: 12 },
+  alertButtonText: { color: colors.primaryDark, fontWeight: "700", flex: 1 },
   backText: { color: colors.primary, fontWeight: "700", fontSize: 16 },
   muted: { color: colors.muted },
   small: { color: colors.muted, fontSize: 12, marginTop: 8 },

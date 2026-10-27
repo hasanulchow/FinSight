@@ -18,6 +18,7 @@ export function narrativeOf(content) {
       recent_events: content.business.recent_events?.map((e) => e.summary),
     },
     risks: content.risks && { overview: content.risks.overview, summaries: content.risks.top_risks?.map((r) => `${r.title}. ${r.summary}`) },
+    technicals: content.technicals?.analysis,
   };
 }
 
@@ -92,6 +93,14 @@ function sourceValues(sourceData) {
   if (q.dividendYield != null) pct.push(q.dividendYield);
   if (q.price && q.week52High) pct.push(((q.week52High - q.price) / q.week52High) * 100);
   if (q.price && q.week52Low) pct.push(((q.price - q.week52Low) / q.week52Low) * 100);
+
+  // Every number in the technical snapshot (indicator values, levels, performance, signal labels)
+  const walk = (v) => {
+    if (typeof v === "number") abs.push(v), pct.push(v);
+    else if (typeof v === "string") for (const n of extractNumbers(v)) (n.kind === "pct" ? pct : abs).push(n.value);
+    else if (v && typeof v === "object") Object.values(v).forEach(walk);
+  };
+  if (sourceData.technicals) walk(sourceData.technicals);
 
   // Numbers stated in the 10-K text (MD&A amounts are often "in millions")
   const tenKText = Object.values(sourceData.tenK ?? {}).map((s) => s?.text ?? "").join("\n");

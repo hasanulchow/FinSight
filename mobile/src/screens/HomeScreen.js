@@ -13,7 +13,7 @@ function greeting() {
   return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
 }
 
-export default function HomeScreen({ email, onOpen }) {
+export default function HomeScreen({ email, onOpen, onOpenStock }) {
   const [ticker, setTicker] = useState("");
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState(null);
@@ -63,7 +63,7 @@ export default function HomeScreen({ email, onOpen }) {
             </Pressable>
           )}
         </View>
-        <Text style={styles.heroTitle}>Which stock are you discussing today?</Text>
+        <Text style={styles.heroTitle}>What are you researching today?</Text>
       </View>
 
       <View style={styles.searchCard}>
@@ -87,7 +87,17 @@ export default function HomeScreen({ email, onOpen }) {
             <Text style={{ color: colors.red, flex: 1 }}>{error}</Text>
           </View>
         )}
-        <PrimaryButton title="Create briefing" icon="sparkles" onPress={() => generate()} loading={starting} style={{ marginTop: 12 }} />
+        <View style={styles.actions}>
+          <PrimaryButton title="Full AI briefing" icon="sparkles" onPress={() => generate()} loading={starting} style={{ flex: 1 }} />
+          <Pressable
+            style={styles.chartButton}
+            onPress={() => (ticker.trim() ? onOpenStock(ticker.trim().toUpperCase()) : setError("Type a ticker symbol, like AAPL."))}
+            accessibilityLabel="Open chart"
+          >
+            <Ionicons name="stats-chart" size={18} color={colors.primary} />
+            <Text style={styles.chartButtonText}>Chart</Text>
+          </Pressable>
+        </View>
 
         <Text style={styles.chipsLabel}>Popular</Text>
         <View style={styles.chips}>
@@ -101,7 +111,7 @@ export default function HomeScreen({ email, onOpen }) {
 
       <View style={styles.howItWorks}>
         <Ionicons name="people-outline" size={18} color={colors.primary} />
-        <Text style={styles.howText}>7 AI agents read the live quote, SEC financials and the latest 10-K, then a reviewer checks it for compliance.</Text>
+        <Text style={styles.howText}>8 AI agents read the live quote, the chart, SEC financials and the latest 10-K, then a reviewer checks the result. "Chart" opens technicals, earnings and insider trades instantly.</Text>
       </View>
 
       <Text style={styles.section}>Your briefings</Text>
@@ -168,6 +178,9 @@ const styles = StyleSheet.create({
   inputRow: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1.5, borderColor: colors.primarySoft, backgroundColor: "#FAFAFF", borderRadius: 14, paddingHorizontal: 14 },
   input: { flex: 1, paddingVertical: 14, fontSize: 18, fontWeight: "700", color: colors.text },
   error: { flexDirection: "row", gap: 6, alignItems: "center", backgroundColor: colors.redSoft, borderRadius: 10, padding: 10, marginTop: 10 },
+  actions: { flexDirection: "row", gap: 10, marginTop: 12 },
+  chartButton: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1.5, borderColor: colors.primarySoft, borderRadius: 14, paddingHorizontal: 14 },
+  chartButtonText: { color: colors.primary, fontWeight: "700" },
   chipsLabel: { color: colors.muted, fontSize: 12, fontWeight: "700", marginTop: 16, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: { borderWidth: 1.5, borderColor: colors.primarySoft, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7 },

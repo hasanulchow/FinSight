@@ -10,6 +10,7 @@ const memories = [];
 const chatMessages = [];
 const guardrailEvents = [];
 const filingChunks = new Map(); // source_url -> chunks
+const tables = new Map(); // generic tables for v1.2 features: name -> rows
 
 const now = () => new Date().toISOString();
 
@@ -135,5 +136,33 @@ export const localStore = {
   },
   setChunks(sourceUrl, chunks) {
     filingChunks.set(sourceUrl, chunks.map((c) => ({ id: randomUUID(), ...c })));
+  },
+
+  // Generic tables (alerts, notifications, holdings, caches, ...): a tiny subset of the Supabase query API
+  rows(name) {
+    if (!tables.has(name)) tables.set(name, []);
+    return tables.get(name);
+  },
+  insert(name, row) {
+    const record = { id: randomUUID(), created_at: now(), ...row };
+    this.rows(name).push(record);
+    return record;
+  },
+  update(name, match, fields) {
+    const hits = this.rows(name).filter(match);
+    hits.forEach((r) => Object.assign(r, fields));
+    return hits;
+  },
+  remove(name, match) {
+    const all = this.rows(name);
+    const keep = all.filter((r) => !match(r));
+    const removed = all.length - keep.length;
+    tables.set(name, keep);
+    return removed;
+  },
+  upsertBy(name, key, row) {
+    const existing = this.rows(name).find((r) => r[key] === row[key]);
+    if (existing) return Object.assign(existing, row);
+    return this.insert(name, row);
   },
 };

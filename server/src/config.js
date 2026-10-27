@@ -18,6 +18,13 @@ export const config = {
   voyageKey: process.env.VOYAGE_API_KEY || null,
   embeddingModel: process.env.EMBEDDING_MODEL || "voyage-4",
   embeddingDimensions: 1024, // must match vector(1024) in supabase/002_memory_guardrails_embeddings.sql
+  // Price history for technical analysis (Massive, formerly Polygon.io)
+  pricesKey: process.env.MASSIVE_API_KEY || process.env.POLYGON_API_KEY || null,
+  pricesBaseUrl: process.env.PRICES_API_BASE || "https://api.massive.com",
+  pricesRpm: Number(process.env.PRICES_RPM || 5),
+  // Scheduled jobs (alerts, screener refresh, digests): POST /jobs/run with this secret
+  cronSecret: process.env.CRON_SECRET || null,
+  jobsIntervalMinutes: Number(process.env.JOBS_INTERVAL_MINUTES || 0), // >0 runs jobs in-process (long-running servers)
   // Guardrails: per-user limits over a rolling hour
   briefingsPerHour: Number(process.env.BRIEFINGS_PER_HOUR || 20),
   questionsPerHour: Number(process.env.QUESTIONS_PER_HOUR || 60),

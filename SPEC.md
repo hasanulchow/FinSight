@@ -475,3 +475,61 @@ All actions are recorded in `guardrail_events (stage, rule, action, detail)`.
 
 ### 16.6 New configuration
 `VOYAGE_API_KEY` (optional), `EMBEDDING_MODEL` (default `voyage-4`), `BRIEFINGS_PER_HOUR` (20), `QUESTIONS_PER_HOUR` (60).
+
+---
+
+## 17. v1.2 Trading Features (Consumer App)
+
+Schema: `supabase/003_trading_features.sql` (run after 002). The app has four tabs: Research, Screener, Portfolio, Alerts. It runs on iOS, Android (EAS builds) and the web.
+
+### 17.1 Technical analysis
+- **Data:** daily OHLCV bars for 2 years from Massive (formerly Polygon.io), cached per ticker in `price_bars` (6 hours; stale data is served if the provider rate-limits).
+- **Indicators** (`lib/indicators.js`, deterministic):
+  - SMA 20/50/200, EMA 12/26, RSI(14, Wilder), MACD(12,26,9), Bollinger(20,2), ATR(14), stochastic(14,3), OBV
+  - Volume vs its 20-day average; 52-week high and low
+  - Swing support/resistance levels (clustered within 1.5%)
+  - Trend classification and crossover dates
+  - About 14 rule-based signals and an overall bullish/neutral/bearish rating
+- **Technical Analyst agent:** explains the snapshot (summary, trend, momentum, volatility, levels, bullish and bearish scenarios, signal meanings, a beginner tip). It may only cite numbers from the snapshot, and the numeric grounding check covers technicals.
+- **Chart:** candles plus SMA50/200, Bollinger Bands, volume and an RSI panel, ranges 1M/3M/6M/1Y, touch to inspect.
+
+### 17.2 Smart alerts
+- **Types:** `price_above|below`, `rsi_above|below`, `golden_cross`, `death_cross`, `macd_bullish|bearish_cross`, `volume_spike`, `new_filing`, `earnings_soon`, `insider_buy`.
+- **Firing rules:** an alert fires once and then turns off, unless set to repeat (24-hour cooldown). Event-type alerts remember what they've already seen, so each event fires only once.
+- **Notification:** a short AI explanation (with a template fallback if the AI call fails), saved in `notifications` and pushed to devices registered in `push_tokens` via the Expo Push API.
+
+### 17.3 Natural-language screener
+- **Universe:** about 100 large caps, or `SCREENER_UNIVERSE`.
+- **Data:** one snapshot per ticker in `screener_snapshots`, refreshed in batches by the job. Each holds price, market cap, P/E, yield, beta, growth, margin, RSI, returns, the 200-day average position, trend and rating.
+- **Pipeline:** Claude turns the request into structured filters (numeric conditions, sectors, trend, rating, sort), code applies them, and Claude writes a one-line note per match.
+
+### 17.4 Earnings and smart money
+- **Sources:**
+  - Finnhub: earnings calendar and EPS surprises
+  - SEC 8-K Item 2.02, exhibit 99.1: the latest earnings release
+  - SEC Form 4 XML: insider transactions, with open-market buy and sell stats over 90 days
+- **Events Analyst agent:** preview, recap, surprise trend, insider summary and signal.
+- **Caching:** 12 hours per ticker in `stock_events_cache`.
+- **Not included:** 13F holdings, which need a paid data source.
+
+### 17.5 Portfolio X-ray
+- **Input:** CSV import (detects delimiter and header; merges lots by weighted average cost) or manual entry, stored in `holdings`.
+- **Metrics:** value, day change, unrealized P/L, weights, sector weights, top-1 and top-3 concentration, effective holdings (1/HHI), chart health per holding (from cached bars), and earnings in the next 30 days.
+- **Portfolio Analyst agent:** narrative analysis and a risk level.
+- **Daily digest:** a notification after the US close.
+
+### 17.6 Jobs
+`runJobs()` handles alerts, the screener batch and digests. It runs via `JOBS_INTERVAL_MINUTES` on long-running servers, or `GET|POST /jobs/run` with `Authorization: Bearer CRON_SECRET` (Vercel Cron is configured).
+
+### 17.7 New endpoints
+- **Market data:** `GET /stocks/:ticker/technicals[?explain=1&days=N]`, `GET /stocks/:ticker/events`
+- **Alerts:** `GET /alerts/types`, `GET|POST /alerts`, `PATCH|DELETE /alerts/:id`
+- **Notifications:** `GET /notifications`, `POST /notifications/:id/read` (or `all`), `POST /push/register`
+- **Screener:** `GET /screener/fields`, `POST /screener`
+- **Portfolio:** `GET /portfolio`, `POST /portfolio/import`, `POST /portfolio/holdings`, `DELETE /portfolio/holdings/:id`, `GET /portfolio/xray[?analysis=0]`
+- **Jobs:** `GET|POST /jobs/run`
+
+AI-backed tools (screener, X-ray analysis, chart explanations) are limited per user by `AI_TOOLS_PER_HOUR`.
+
+### 17.8 New configuration
+`MASSIVE_API_KEY` (or `POLYGON_API_KEY`), `PRICES_API_BASE`, `PRICES_RPM`, `JOBS_INTERVAL_MINUTES`, `CRON_SECRET`, `SCREENER_BATCH`, `SCREENER_UNIVERSE`, `AI_TOOLS_PER_HOUR`, `FINNHUB_API_BASE`.
