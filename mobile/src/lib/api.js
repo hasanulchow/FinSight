@@ -25,7 +25,8 @@ async function send(path, options, token) {
   const body = await res.json().catch(() => ({}));
   // The API rejected the token (expired, revoked, or from another Supabase project): back to login.
   if (res.status === 401 && token) await supabase.auth.signOut();
-  if (!res.ok) throw new Error(body.error || `Request failed (${res.status})`);
+  // 402 + upgrade: a Free plan limit was hit; screens show an upgrade prompt for these
+  if (!res.ok) throw Object.assign(new Error(body.error || `Request failed (${res.status})`), { status: res.status, upgrade: !!body.upgrade });
   return body;
 }
 
@@ -79,4 +80,29 @@ export const api = {
   // Markets
   market: () => request("/market/overview"),
   compare: (tickers, days = 252) => request(`/market/compare?tickers=${encodeURIComponent(tickers.join(","))}&days=${days}`),
+
+  // Copilot agent
+  copilotChat: (message, conversationId) => request("/copilot/chat", { method: "POST", body: JSON.stringify({ message, conversation_id: conversationId }) }),
+  copilotConversations: () => request("/copilot/conversations"),
+  copilotMessages: (id) => request(`/copilot/conversations/${id}`),
+  copilotAction: (id, decision) => request(`/copilot/actions/${id}/${decision}`, { method: "POST" }),
+
+  // Trade journal
+  journal: () => request("/journal"),
+  addTrade: (trade) => request("/journal/trades", { method: "POST", body: JSON.stringify(trade) }),
+  updateTrade: (id, fields) => request(`/journal/trades/${id}`, { method: "PATCH", body: JSON.stringify(fields) }),
+  deleteTrade: (id) => request(`/journal/trades/${id}`, { method: "DELETE" }),
+  importTrades: (csv) => request("/journal/import", { method: "POST", body: JSON.stringify({ csv }) }),
+  journalCoach: () => request("/journal/coach", { method: "POST" }),
+
+  // Risk tools
+  positionSize: (input) => request("/risk/position-size", { method: "POST", body: JSON.stringify(input) }),
+  benchmark: (days = 252) => request(`/portfolio/benchmark?days=${days}`),
+  redFlags: (ticker) => request(`/stocks/${encodeURIComponent(ticker)}/redflags`),
+
+  // Plans and billing
+  plans: () => request("/plans"),
+  account: () => request("/account"),
+  checkout: (returnUrl) => request("/billing/checkout", { method: "POST", body: JSON.stringify({ return_url: returnUrl }) }),
+  billingPortal: (returnUrl) => request("/billing/portal", { method: "POST", body: JSON.stringify({ return_url: returnUrl }) }),
 };

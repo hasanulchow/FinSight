@@ -3,6 +3,7 @@ import { Modal, Pressable, ScrollView, Switch, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../lib/api";
 import { makeStyles, useTheme } from "../theme";
+import { ErrorNotice } from "./Upgrade";
 import { Button, Chip, Input } from "./ui";
 
 // Alert types, grouped for the picker (labels mirror server/src/lib/alerts.js)
@@ -46,7 +47,7 @@ export default function AlertSheet({ ticker, price, visible, onClose, onCreated 
       setThreshold("");
       onClose();
     } catch (e) {
-      setError(e.message);
+      setError(e);
     }
     setBusy(false);
   }
@@ -95,7 +96,7 @@ export default function AlertSheet({ ticker, price, visible, onClose, onCreated 
             </View>
             <Switch value={repeat} onValueChange={setRepeat} trackColor={{ true: c.primary, false: c.borderStrong }} />
           </View>
-          {error && <Text style={s.error}>{error}</Text>}
+          {error && (error.upgrade ? <ErrorNotice error={error} /> : <Text style={s.error}>{error.message ?? error}</Text>)}
           <Button title="Create alert" icon="notifications" onPress={save} loading={busy} size="lg" style={{ marginTop: 16 }} />
           <Text style={s.footnote}>Indicator alerts use end-of-day data. You'll get an in-app notification, plus a push on your phone if enabled.</Text>
         </View>

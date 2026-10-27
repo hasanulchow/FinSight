@@ -14,11 +14,14 @@ import { MEMORY_KINDS, addMemory, chatHistory, deleteMemory, listMemories, saveC
 import { indexFiling, searchFiling } from "./lib/retrieval.js";
 import { evalSummary } from "./lib/evalSummary.js";
 import { registerTradingRoutes } from "./routes/trading.js";
+import { registerSaasRoutes } from "./routes/saas.js";
+import { checkQuota, recordUsage } from "./lib/plans.js";
 import { startScheduler } from "./lib/jobs.js";
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+// Keep the raw bytes too: Stripe webhook signatures are computed over the exact request body
+app.use(express.json({ limit: "1mb", verify: (req, _res, buf) => { req.rawBody = buf; } }));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
@@ -42,6 +45,13 @@ app.post("/briefings", requireUser, async (req, res) => {
     await logGuardrail({ userId: req.user.id, stage: "input", rule: limit.rule, action: "blocked", detail: { ticker } });
     return res.status(429).json({ error: limit.reason });
   }
+  // Plan quota (daily); 402 tells the app to show the upgrade prompt
+  try {
+    await checkQuota(req.user.id, "briefing");
+  } catch (err) {
+    return res.status(err.status ?? 500).json({ error: err.message, upgrade: err.upgrade });
+  }
+  await recordUsage(req.user.id, "briefing", { ticker });
 
   if (config.localMode) {
     const row = localStore.createBriefing({ user_id: req.user.id, ticker, status: "running", progress: "Starting" });
@@ -212,6 +222,11 @@ app.post("/briefings/:id/ask", requireUser, async (req, res) => {
       await logGuardrail({ userId, briefingId, stage: "input", rule: limit.rule, action: "blocked" });
       return res.status(429).json({ error: limit.reason });
     }
+    try {
+      await checkQuota(userId, "question");
+    } catch (err) {
+      return res.status(err.status ?? 500).json({ error: err.message, upgrade: err.upgrade });
+    }
     const input = checkInput(req.body?.question, { maxLength: 500, label: "Question" });
     if (!input.ok) {
       await logGuardrail({ userId, briefingId, stage: "input", rule: input.rule, action: "blocked", detail: input.detail ?? null });
@@ -234,6 +249,7 @@ app.post("/briefings/:id/ask", requireUser, async (req, res) => {
     }
 
     const userMessage = await saveChatMessage({ briefing_id: briefingId, user_id: userId, role: "user", content: input.text, guardrail: input.flags });
+    await recordUsage(userId, "question", { briefing_id: briefingId });
     const answer = await qaAgent({ company, question: input.text, passages, history, seeksAdvice: input.flags.advice, briefingId });
 
     // Output guardrails
@@ -280,6 +296,8 @@ app.get("/evals/summary", requireUser, async (req, res) => {
 
 // Technical analysis, alerts, screener, earnings & insiders, portfolio, scheduled jobs
 registerTradingRoutes(app);
+// Copilot, journal, risk tools, red flags, plans and billing
+registerSaasRoutes(app);
 
 // Vercel imports the app as a function (api/index.js); everywhere else, run a normal server.
 if (!process.env.VERCEL) {

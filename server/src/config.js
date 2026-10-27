@@ -25,6 +25,11 @@ export const config = {
   // Scheduled jobs (alerts, screener refresh, digests): POST /jobs/run with this secret
   cronSecret: process.env.CRON_SECRET || null,
   jobsIntervalMinutes: Number(process.env.JOBS_INTERVAL_MINUTES || 0), // >0 runs jobs in-process (long-running servers)
+  // Billing (Stripe). Without these, everyone stays on the Free plan and upgrades are hidden.
+  stripeKey: process.env.STRIPE_SECRET_KEY || null,
+  stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET || null,
+  stripePricePro: process.env.STRIPE_PRICE_PRO || null,
+  appUrl: process.env.APP_URL || "http://localhost:3001",
   // Guardrails: per-user limits over a rolling hour
   briefingsPerHour: Number(process.env.BRIEFINGS_PER_HOUR || 20),
   questionsPerHour: Number(process.env.QUESTIONS_PER_HOUR || 60),

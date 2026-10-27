@@ -212,3 +212,23 @@ export async function getLatestEarningsRelease(cik) {
   const text = htmlToText(await secFetch(`${folder}/${exhibit.name}`, "text"));
   return { filingDate: filing.filingDate, url: `${folder}/${exhibit.name}`, text: text.slice(0, 25000), truncated: text.length > 25000 };
 }
+
+// ---------- Red-flag inputs ----------
+
+/** Every recent filing (all form types) with dates and 8-K item codes, newest first. */
+export async function getFilingIndex(cik, limit = 400) {
+  const data = await secFetch(`https://data.sec.gov/submissions/CIK${cik}.json`);
+  const r = data.filings.recent;
+  const out = [];
+  for (let i = 0; i < Math.min(r.form.length, limit); i++) out.push({ form: r.form[i], filingDate: r.filingDate[i], items: r.items[i] || "" });
+  return { name: data.name, sic: data.sicDescription, filings: out };
+}
+
+/** Shares outstanding over time (dei cover-page values, deduplicated by period end), oldest first. */
+export async function getSharesOutstanding(cik) {
+  const data = await secFetch(`https://data.sec.gov/api/xbrl/companyfacts/CIK${cik}.json`);
+  const entries = data.facts?.dei?.EntityCommonStockSharesOutstanding?.units?.shares ?? [];
+  const byEnd = new Map();
+  for (const e of entries) byEnd.set(e.end, e.val);
+  return [...byEnd.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([end, shares]) => ({ end, shares }));
+}

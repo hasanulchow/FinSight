@@ -582,3 +582,79 @@ Schema: `supabase/004_options_markets.sql` adds `kv_cache`, a shared cache for o
 
 ### 18.7 New configuration
 `RISK_FREE_RATE` (default 0.04).
+
+## 19. v1.4 Agentic SaaS Layer
+
+**Goal:** move from a set of research tools to an agentic product people pay for. It targets the problems retail traders raise most:
+- No plan for position size and risk
+- Repeating the same emotional mistakes
+- Not knowing whether they beat the index
+- Getting caught in dilution or pump-and-dump stocks
+- Too many screens to check
+
+### 19.1 AI Copilot (`lib/copilot.js`)
+- **Loop.** A manual tool-use loop on Claude Sonnet 5.5 (effort medium, server-side fallbacks).
+  - Max 8 steps per turn. Tool calls in one step run in parallel, and all results go back in one message.
+  - Results are truncated to 14k characters.
+  - History is the last 12 messages of the conversation.
+- **Tools (18).**
+  - Research tools: snapshot/technicals, earnings and insiders, red flags, 10-K search, options overview, strategy analysis, backtest, screener, market overview, performance compare.
+  - User-data tools: portfolio, benchmark, journal stats, position size, list alerts.
+  - Write tools: `create_alert`, `add_holding` and `log_trade`.
+- **Human in the loop.** Write tools insert a `copilot_actions` row with status `pending`. The app shows a Confirm/Cancel card, and only `POST /copilot/actions/:id/confirm` executes the change. Confirming twice returns 409.
+- **Safety.**
+  - The input guardrail runs before the loop and the output guardrail after it.
+  - The system prompt treats tool results as data, never instructions.
+  - It gives educational framing only, with no buy/sell calls.
+- **Trace.** Each assistant message stores `trace` (tool, input, ok, ms) and `actions`. When a conversation is reopened, each action shows its current status.
+
+### 19.2 Trade journal (`lib/journal.js`)
+- **Trade fields:** ticker, side, instrument (stock/option ×100/etf/crypto/future), qty, entry/exit price and date, stop, target, setup, emotion (8 values), notes, fees.
+- **Per-trade result:** P/L, return %, R multiple (when a stop is set), hold days.
+- **Stats:**
+  - Totals: win rate, profit factor, expectancy, avg win/loss, avg R, % of trades with a stop, max drawdown, best/worst trade, streaks, hold days for wins vs losses.
+  - Realized P/L year to date.
+  - The after-loss cohort: trades opened within 2 days of a losing exit.
+  - Breakdowns by setup, emotion, ticker, side and weekday.
+  - Equity curve.
+- **Wash sales:** a losing exit, followed by a buy of the same ticker within 30 days before or after it, where that lot is still held after the sale.
+- **Coach agent:** structured output with a headline, strengths, leaks (pattern, evidence, impact), rules to consider and a next focus. Needs 3 or more closed trades and counts against the `ai_tool` quota.
+- **CSV import:** matches columns by name, preferring exact header matches. It also reads stop, target, emotion, notes and instrument.
+
+### 19.3 Risk tools (`lib/risk.js`)
+- **Position size.**
+  - Shares = floor((account × risk%) ÷ |entry − stop|), capped by the max position %.
+  - The stop comes from the user, else 2× ATR(14).
+  - The result also includes R targets and chart-based stop suggestions (2× ATR, just below support or above resistance).
+- **Benchmark.**
+  - Current holdings at constant share counts vs SPY, over the dates where every priced holding and SPY have data.
+  - Reports total return, annualized volatility, max drawdown, Sharpe, beta and correlation.
+
+### 19.4 Red-flag radar (`lib/redflags.js`)
+- **Checks:** price < $1, penny stock (< $5), micro-cap, ATR% ≥ 8, share count growth over a year (≥ 10% medium, ≥ 25% high), recent S-1/S-3/424B filings, 8-K items 3.01 (delisting), 4.01 (auditor change), 4.02 (non-reliance) and 5.03, NT 10-K/10-Q, cash runway, going-concern language in the 10-K, and no SEC registration.
+- **Output:** `risk_level` (none, low, elevated, high) with evidence per flag. Cached for 12 hours.
+
+### 19.5 Plans, quotas and billing (`lib/plans.js`, `lib/billing.js`)
+| | Free | Pro |
+|---|---|---|
+| Briefings / day | 3 | 40 |
+| Copilot messages / day | 15 | 300 |
+| AI tools / day (screener, explanations, X-ray, coach) | 10 | 200 |
+| 10-K questions / day | 10 | 200 |
+| Alerts / holdings / journal trades | 5 / 25 / 200 | 100 / 500 / 20,000 |
+
+- **Configuration.** Daily limits can be overridden with env vars. Usage is recorded in `usage_events` over a rolling 24 hours.
+- **Over a limit.** The API returns HTTP 402 `{ error, upgrade: true }`, and the app shows an upgrade card that opens Account & plans.
+- **Billing flow.**
+  - Stripe Checkout (subscription mode) is linked to the user by `client_reference_id` and metadata.
+  - The customer portal handles plan management.
+  - The webhook is verified against the raw body, handles checkout completed and subscription created/updated/deleted, and upserts `subscriptions`.
+  - The plan is Pro while the status is active or trialing.
+
+### 19.6 App
+- **Navigation.**
+  - Phone tabs: Copilot (default), Research, Markets, Portfolio and More. More holds Journal, Screener, Alerts and Account.
+  - The desktop sidebar lists every section.
+- **Stock page:** adds the Red-flag radar card and a "Size it" position sizer sheet.
+- **Portfolio:** adds the vs S&P 500 card.
+- **Data model:** migration `005` adds `trades`, `subscriptions`, `usage_events`, `copilot_conversations`, `copilot_messages` and `copilot_actions`. RLS limits select to the row's owner.

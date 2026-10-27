@@ -1,6 +1,6 @@
 # FinSight: AI stock research for traders and investors
 
-Type a ticker and get an AI briefing in about a minute: live quote, chart and technical analysis, multi-year financials from SEC XBRL data, business and risk summaries from the latest 10-K, earnings and insider activity, and talking points. Add smart alerts, a natural-language screener and a Portfolio X-ray. Every briefing is checked by compliance guardrails and scored by an LLM judge plus automated checks.
+Type a ticker and get an AI briefing in about a minute: live quote, chart and technical analysis, multi-year financials from SEC XBRL data, business and risk summaries from the latest 10-K, earnings and insider activity, and talking points. Ask the **Copilot**, an AI agent that uses 18 FinSight tools and proposes alerts, holdings and journal entries for you to confirm. Keep a **trade journal** with an AI coach, size positions to your risk, compare your portfolio with SPY, and scan any stock for red flags. Add smart alerts, a natural-language screener and a Portfolio X-ray. Free and Pro plans, billed with Stripe. Every briefing is checked by compliance guardrails and scored by an LLM judge plus automated checks.
 
 **Stack:** React Native (Expo) · Node.js (Express) · Claude Sonnet 5.5 · Supabase (Postgres + Auth) · SEC EDGAR · Finnhub · Massive (prices) · Voyage AI (embeddings) · Render or Vercel
 
@@ -117,13 +117,31 @@ The first options or markets request for a symbol can take up to a minute on the
 - **Render or local:** set `JOBS_INTERVAL_MINUTES=10`.
 - **Vercel:** `vercel.json` defines a weekday cron calling `/jobs/run`, authorized by `CRON_SECRET`. The Hobby plan allows one run a day; Pro allows more frequent runs.
 
+### Agentic SaaS layer (v1.4)
+
+| Feature | What it does | Where |
+|---|---|---|
+| **AI Copilot** | A chat agent with 18 tools: quotes and technicals, earnings and insiders, red flags, the 10-K, options and strategies, backtests, screener, market overview, your portfolio and benchmark, your journal, position sizing and alerts. Independent tool calls run in parallel, for up to 8 steps per turn. Each answer shows which tools ran. Write tools (`create_alert`, `add_holding`, `log_trade`) only **propose** a change; it happens when the user taps Confirm. | `lib/copilot.js` |
+| **Trade journal + AI coach** | Log trades by hand, or import a CSV, tagged with setup and emotion. Stats: win rate, profit factor, expectancy, average R, drawdown, streaks, hold times, realized P/L this year, and an equity curve. Breakdowns by emotion, setup, ticker and weekday. Flags trades placed right after a loss (revenge trading) and possible **wash sales**. The coach agent turns the stats into strengths, costly leaks and rules to try. | `lib/journal.js` |
+| **Position sizer** | Shares to buy so a stop-out loses only X% of the account. The stop comes from you, 2× ATR, or nearest support/resistance. Also shows a max-position cap and 1R/2R/3R targets. | `lib/risk.js` |
+| **Portfolio vs SPY** | Return, volatility, max drawdown, Sharpe, beta and correlation of your current holdings against SPY over 3 months to 2 years. | `risk.benchmarkPortfolio` |
+| **Red-flag radar** | Checks for sub-$1 and penny stocks, micro-caps, extreme volatility, share dilution, S-1/S-3/424B offerings, 8-K delisting notices, auditor changes, restatements, late filings, short cash runway and going-concern language. Each flag comes with evidence. | `lib/redflags.js` |
+| **Plans, quotas and billing** | Free and Pro plans with daily AI quotas (`usage_events`) and caps on alerts, holdings and trades. Hitting a limit returns HTTP 402 with `upgrade: true`, and the app shows an upgrade prompt. Stripe Checkout, the customer portal and a signed webhook keep `subscriptions` in sync. | `lib/plans.js`, `lib/billing.js`, `routes/saas.js` |
+
+**Billing setup (optional):**
+1. In Stripe, create a recurring Price for Pro.
+2. Set `STRIPE_SECRET_KEY`, `STRIPE_PRICE_PRO` and `APP_URL`.
+3. Add a webhook to `<APP_URL>/billing/webhook` for `checkout.session.completed` and `customer.subscription.created/updated/deleted`, and put its signing secret in `STRIPE_WEBHOOK_SECRET`.
+
+Without Stripe keys, everyone stays on Free and upgrades are hidden. In local mode, `DEV_PLAN=free|pro` picks the plan (default `pro`).
+
 ## Setup
 
 **Requirements:** Node.js 22 or later (Expo SDK 58 and supabase-js need it), and the Expo Go app on your phone.
 
 ### 1. Supabase
 1. Create a project at supabase.com.
-2. In the SQL editor, run `supabase/schema.sql`, then `supabase/002_memory_guardrails_embeddings.sql` (pgvector, memory, chat, guardrail log), then `supabase/003_trading_features.sql` (price cache, alerts, notifications, push tokens, screener, earnings cache, holdings), then `supabase/004_options_markets.sql` (shared cache for options and market data).
+2. In the SQL editor, run `supabase/schema.sql`, then `supabase/002_memory_guardrails_embeddings.sql` (pgvector, memory, chat, guardrail log), then `supabase/003_trading_features.sql` (price cache, alerts, notifications, push tokens, screener, earnings cache, holdings), then `supabase/004_options_markets.sql` (shared cache for options and market data), then `supabase/005_copilot_journal_billing.sql` (journal, Copilot, plans, usage and subscriptions).
 3. Authentication → Providers → Email: enabled. For a quick demo, turn off "Confirm email".
 4. Authentication → URL Configuration: set Site URL to your deployed URL (e.g. `https://finsight.onrender.com`) and add it plus `http://localhost:3001` under Redirect URLs, so confirmation emails link back to the app.
 5. Project Settings → API: copy the URL, the anon key and the service-role key.
@@ -191,6 +209,17 @@ All routes need `Authorization: Bearer <Supabase access token>`.
 | POST | `/memory` | `{ content, kind?: preference \| note \| client_context, ticker? }` (PII redacted, injection blocked) |
 | DELETE | `/memory/:id` | Delete a memory |
 | GET | `/evals/summary` | Quality dashboard: scores, grounding, Q&A, guardrails, feedback agreement |
+| POST | `/copilot/chat` | `{ message, conversation_id? }` → `{ conversation_id, message, actions, trace }` |
+| GET | `/copilot/conversations`, `/copilot/conversations/:id` | Past conversations and their messages |
+| POST | `/copilot/actions/:id/confirm` or `/cancel` | Run or drop a change the Copilot proposed |
+| GET | `/journal` | Trades (with P/L and R), stats, emotions |
+| POST / PATCH / DELETE | `/journal/trades`, `/journal/trades/:id` | Add, close/edit or delete a trade |
+| POST | `/journal/import`, `/journal/coach` | CSV import; AI coaching (needs 3+ closed trades) |
+| POST | `/risk/position-size` | `{ account_size, risk_pct, ticker?, entry?, stop?, side?, max_position_pct? }` |
+| GET | `/portfolio/benchmark?days=` | Holdings vs SPY |
+| GET | `/stocks/:ticker/redflags` | Red-flag scan |
+| GET | `/plans`, `/account` | Plans; the user's plan, today's usage and caps |
+| POST | `/billing/checkout`, `/billing/portal`, `/billing/webhook` | Stripe Checkout, customer portal, webhook (signature-verified) |
 
 ## Known limitations
 

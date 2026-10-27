@@ -12,13 +12,17 @@ import Heatmap from "../components/Heatmap";
 // and labeled as examples: the landing page never shows made-up numbers as real market data.
 
 const FEATURES = [
+  { hue: "violet", icon: "chatbubbles", title: "AI Copilot", text: "Ask anything. An agent with 18 tools pulls charts, filings, options, your portfolio and your journal, and sets alerts once you confirm." },
+  { hue: "emerald", icon: "journal", title: "Journal + AI coach", text: "Log trades with your setup and mood. See win rate, expectancy and drawdown, spot revenge trades and wash sales, and get coached on your leaks." },
+  { hue: "orange", icon: "calculator", title: "Position sizer", text: "Know exactly how many shares to buy so a stop-out costs 1% of your account, with ATR and support-based stops." },
+  { hue: "rose", icon: "flag", title: "Red-flag radar", text: "Dilution, offerings, going-concern warnings, delisting notices and auditor changes, flagged from SEC filings before you buy." },
   { hue: "indigo", icon: "sparkles", title: "AI stock briefings", text: "Eight specialist agents read the quote, the chart, SEC financials and the latest 10-K, then write a briefing you can read in two minutes." },
   { hue: "sky", icon: "analytics", title: "Technical analysis", text: "Candles, moving averages, RSI, MACD, Bollinger Bands, support and resistance, with an AI that explains what the chart is saying." },
   { hue: "cyan", icon: "options", title: "Options center", text: "Implied vs historical volatility, expected move, probabilities and a strategy builder with payoff charts for 10 strategies." },
   { hue: "orange", icon: "flask", title: "Strategy backtester", text: "Test crossovers, RSI, MACD and breakout rules on real history against buy-and-hold, with drawdowns and every trade." },
   { hue: "amber", icon: "notifications", title: "Smart alerts", text: "Price, RSI, crossovers, volume spikes, filings, earnings and insider buys, each explained by AI the moment it fires." },
   { hue: "teal", icon: "funnel", title: "Plain-English screener", text: "“Oversold large caps above their 200-day average.” Describe it, and AI turns it into filters across large-cap stocks." },
-  { hue: "violet", icon: "pie-chart", title: "Portfolio X-ray", text: "Import a CSV and see concentration, sector exposure, chart health and upcoming earnings, plus a daily digest." },
+  { hue: "blue", icon: "pie-chart", title: "Portfolio X-ray", text: "Import a CSV and see concentration, sector exposure and chart health, and whether you're actually beating the S&P 500." },
   { hue: "pink", icon: "people", title: "Earnings & insiders", text: "Next report date, beat/miss history, an AI recap of the latest release and every Form 4 insider trade." },
 ];
 
@@ -39,6 +43,8 @@ const FAQ = [
   ["Where does the data come from?", "Quotes and fundamentals from Finnhub, price history and options data from Massive (formerly Polygon.io), and company filings directly from SEC EDGAR."],
   ["Is this investment advice?", "No. FinSight explains data and filings in plain language. It never recommends buying, selling or holding, and every screen says so."],
   ["How accurate are the AI briefings?", "Numbers come from code, not the AI. Each briefing is checked for quotes that really appear in the filing and numbers that match the source data, then scored by an independent AI judge."],
+  ["What does it cost?", "FinSight is free to start, with daily limits on the AI features. Pro raises every limit (300 Copilot messages a day, 40 briefings, 100 alerts), and you can cancel anytime."],
+  ["Will the Copilot trade or change things on its own?", "No. It can't place trades, and anything it wants to change in your account, like an alert or a journal entry, waits for you to tap Confirm."],
   ["Does it work on my phone?", "Yes. FinSight runs on iOS, Android and the web, with push notifications for alerts on mobile."],
 ];
 
@@ -153,7 +159,7 @@ export default function LandingScreen({ onStart }) {
                 Understand any stock <Text style={{ color: c.primary }}>in 60 seconds.</Text>
               </Text>
               <Text style={s.lead}>
-                FinSight's eight AI agents read the live quote, the chart, SEC financials and the latest 10-K, then hand you a clear, cited briefing, plus options analytics, backtests, alerts and a portfolio X-ray.
+                FinSight's eight AI agents read the live quote, the chart, SEC financials and the latest 10-K, then hand you a clear, cited briefing. Ask the Copilot anything, journal your trades with an AI coach, and size every position to your risk.
               </Text>
               <View style={s.ctaRow}>
                 <Button title="Create your account" size="lg" iconRight="arrow-forward" onPress={() => onStart("signup")} />

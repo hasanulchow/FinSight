@@ -3,6 +3,7 @@ import { ActivityIndicator, FlatList, Pressable, Text, View } from "react-native
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../lib/api";
 import { makeStyles, useTheme } from "../theme";
+import { ErrorNotice } from "../components/Upgrade";
 import { Banner, Input, PageHeader, Pill, TickerAvatar } from "../components/ui";
 
 const EXAMPLES = [
@@ -33,7 +34,7 @@ export default function ScreenerScreen({ onOpenStock }) {
     try {
       setResult(await api.screen(q));
     } catch (e) {
-      setError(e.message);
+      setError(e);
     }
     setBusy(false);
   }
@@ -60,7 +61,7 @@ export default function ScreenerScreen({ onOpenStock }) {
           }
           style={{ paddingRight: 5 }}
         />
-        {error && <Banner tone="error">{error}</Banner>}
+        <ErrorNotice error={error} />
         {!result && (
           <View style={s.examples}>
             <Text style={s.label}>Try one of these</Text>

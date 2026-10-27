@@ -11,6 +11,7 @@ import { listNotifications, markRead, registerPushToken } from "../lib/notify.js
 import { runScreen, universe, NUMERIC_FIELDS } from "../lib/screener.js";
 import { computeXray, deleteHolding, listHoldings, parseHoldingsCsv, portfolioAnalyst, upsertHoldings } from "../lib/portfolio.js";
 import { runJobs } from "../lib/jobs.js";
+import { checkCap, checkQuota, recordUsage } from "../lib/plans.js";
 import { getOptionsOverview, strategyFromOverview, STRATEGIES } from "../lib/options.js";
 import { optionsAnalyst } from "../agents/optionsAnalyst.js";
 import { runBacktest, BACKTEST_STRATEGIES } from "../lib/backtest.js";
@@ -22,15 +23,10 @@ import { getEarningsCalendar } from "../tools/quote.js";
 
 const TICKER_RE = /^[A-Z][A-Z0-9.\-]{0,9}$/;
 
-// Per-user limit on AI-backed tools (screener, X-ray, chart explanations), per server instance
-const aiCalls = new Map();
-function aiLimit(userId) {
-  const hourAgo = Date.now() - 3_600_000;
-  const recent = (aiCalls.get(userId) ?? []).filter((t) => t > hourAgo);
-  if (recent.length >= Number(process.env.AI_TOOLS_PER_HOUR || 30)) return false;
-  recent.push(Date.now());
-  aiCalls.set(userId, recent);
-  return true;
+// AI-backed tools (screener, chart/options explanations, X-ray analysis) count against the plan's daily quota
+async function aiQuota(userId, tool) {
+  await checkQuota(userId, "ai_tool");
+  await recordUsage(userId, "ai_tool", { tool });
 }
 
 // Wraps async handlers: errors with .status become that HTTP status
@@ -39,7 +35,7 @@ const handle = (fn) => async (req, res) => {
     await fn(req, res);
   } catch (err) {
     console.error(`${req.method} ${req.path}:`, err.message);
-    if (!res.headersSent) res.status(err.status ?? 500).json({ error: err.message });
+    if (!res.headersSent) res.status(err.status ?? 500).json({ error: err.message, ...(err.upgrade != null && { upgrade: err.upgrade }) });
   }
 };
 
@@ -62,7 +58,7 @@ export function registerTradingRoutes(app) {
     const snapshot = technicalSnapshot(bars);
     const out = { ticker, snapshot, chart: chartSeries(bars, Number(req.query.days) || 180) };
     if (req.query.explain === "1") {
-      if (!aiLimit(req.user.id)) return res.status(429).json({ error: "Hourly limit for AI tools reached. Try again later." });
+      await aiQuota(req.user.id, "technicals");
       const company = (await lookupCompany(ticker)) ?? { name: ticker, ticker };
       out.analysis = enforceOutput(await technicalAnalyst({ company, snapshot })).value;
     }
@@ -79,7 +75,10 @@ export function registerTradingRoutes(app) {
   // ---------- Alerts ----------
   app.get("/alerts/types", requireUser, (_req, res) => res.json(Object.entries(ALERT_TYPES).map(([type, s]) => ({ type, label: s.label, needs: s.needs ?? null }))));
   app.get("/alerts", requireUser, handle(async (req, res) => res.json(await listAlerts(req.user.id))));
-  app.post("/alerts", requireUser, handle(async (req, res) => res.status(201).json(await createAlert(req.user.id, req.body ?? {}))));
+  app.post("/alerts", requireUser, handle(async (req, res) => {
+    await checkCap(req.user.id, "alerts", (await listAlerts(req.user.id)).filter((a) => a.active).length);
+    res.status(201).json(await createAlert(req.user.id, req.body ?? {}));
+  }));
   app.patch("/alerts/:id", requireUser, handle(async (req, res) => ((await updateAlert(req.user.id, req.params.id, req.body ?? {})) ? res.json({ ok: true }) : res.status(404).json({ error: "Not found" }))));
   app.delete("/alerts/:id", requireUser, handle(async (req, res) => ((await deleteAlert(req.user.id, req.params.id)) ? res.json({ ok: true }) : res.status(404).json({ error: "Not found" }))));
 
@@ -102,7 +101,7 @@ export function registerTradingRoutes(app) {
       await logGuardrail({ userId: req.user.id, stage: "input", rule: input.rule, action: "blocked", detail: { where: "screener" } });
       return res.status(400).json({ error: input.reason });
     }
-    if (!aiLimit(req.user.id)) return res.status(429).json({ error: "Hourly limit for AI tools reached. Try again later." });
+    await aiQuota(req.user.id, "screener");
     res.json(await runScreen(input.text));
   }));
 
@@ -113,6 +112,7 @@ export function registerTradingRoutes(app) {
     if (csv.length > 200_000) return res.status(400).json({ error: "That file is too large (max 200 KB)" });
     const { holdings, skipped } = parseHoldingsCsv(csv);
     if (!holdings.length) return res.status(400).json({ error: "No holdings found. Use columns like Symbol, Quantity, Average Cost, or lines like 'AAPL,10,150'.", skipped: skipped.slice(0, 10) });
+    await checkCap(req.user.id, "holdings", (req.body?.mode === "replace" ? 0 : (await listHoldings(req.user.id)).length) + holdings.length - 1);
     const saved = await upsertHoldings(req.user.id, holdings, { mode: req.body?.mode === "replace" ? "replace" : "merge" });
     res.json({ imported: holdings.length, skipped: skipped.slice(0, 20), holdings: saved });
   }));
@@ -123,6 +123,8 @@ export function registerTradingRoutes(app) {
     if (!TICKER_RE.test(ticker)) return res.status(400).json({ error: "Enter a valid ticker" });
     if (!(shares > 0)) return res.status(400).json({ error: "Shares must be greater than 0" });
     if (cost != null && !(cost > 0)) return res.status(400).json({ error: "Cost per share must be greater than 0" });
+    const current = await listHoldings(req.user.id);
+    if (!current.some((h) => h.ticker === ticker)) await checkCap(req.user.id, "holdings", current.length);
     res.json(await upsertHoldings(req.user.id, [{ ticker, shares, cost_basis: cost }]));
   }));
   app.delete("/portfolio/holdings/:id", requireUser, handle(async (req, res) => ((await deleteHolding(req.user.id, req.params.id)) ? res.json({ ok: true }) : res.status(404).json({ error: "Not found" }))));
@@ -131,7 +133,11 @@ export function registerTradingRoutes(app) {
     if (!xray) return res.json({ empty: true });
     let analysis = null;
     if (req.query.analysis !== "0") {
-      if (!aiLimit(req.user.id)) return res.json({ ...xray, analysis: null, analysis_error: "Hourly limit for AI tools reached." });
+      try {
+        await aiQuota(req.user.id, "xray");
+      } catch (err) {
+        return res.json({ ...xray, analysis: null, analysis_error: err.message, upgrade: err.upgrade });
+      }
       analysis = await portfolioAnalyst(xray).catch((err) => (console.error("Portfolio analyst:", err.message), null));
     }
     res.json({ ...xray, analysis });
@@ -154,7 +160,7 @@ export function registerTradingRoutes(app) {
     const earnings = await nextEarnings(ticker);
     let ai = null;
     if (req.query.explain === "1") {
-      if (!aiLimit(req.user.id)) return res.status(429).json({ error: "Hourly limit for AI tools reached. Try again later." });
+      await aiQuota(req.user.id, "options");
       ai = enforceOutput(await optionsAnalyst({ overview, nextEarnings: earnings })).value;
     }
     res.json({ ...overview, next_earnings: earnings, ai });
@@ -170,7 +176,7 @@ export function registerTradingRoutes(app) {
     // `analysis` is the payoff math; the AI explanation goes in `ai`
     let ai = null;
     if (req.body?.explain) {
-      if (!aiLimit(req.user.id)) return res.status(429).json({ error: "Hourly limit for AI tools reached. Try again later." });
+      await aiQuota(req.user.id, "strategy");
       ai = enforceOutput(await optionsAnalyst({ overview, strategy, nextEarnings: await nextEarnings(ticker) })).value;
     }
     res.json({ ...strategy, data_source: overview.data_source, ai });

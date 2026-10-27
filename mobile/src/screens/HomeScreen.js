@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { api } from "../lib/api";
 import { localMode, supabase } from "../lib/supabase";
 import { makeStyles, scoreLabel, useTheme } from "../theme";
+import { ErrorNotice } from "../components/Upgrade";
 import { Banner, Button, Chip, EmptyState, IconButton, Input, PageHeader, TickerAvatar } from "../components/ui";
 
 const POPULAR = ["AAPL", "MSFT", "NVDA", "AMZN", "TSLA", "JPM", "META", "GOOGL"];
@@ -27,7 +28,7 @@ export default function HomeScreen({ email, onOpen, onOpenStock, showSignOut = t
     try {
       setHistory(await api.listBriefings());
     } catch (e) {
-      setError(e.message);
+      setError(e);
     }
     setRefreshing(false);
   }, []);
@@ -46,7 +47,7 @@ export default function HomeScreen({ email, onOpen, onOpenStock, showSignOut = t
       setTicker("");
       onOpen(id);
     } catch (e) {
-      setError(e.message);
+      setError(e);
     }
     setStarting(false);
   }
@@ -77,7 +78,7 @@ export default function HomeScreen({ email, onOpen, onOpenStock, showSignOut = t
           returnKeyType="go"
           inputStyle={s.searchInput}
         />
-        {error && <Banner tone="error">{error}</Banner>}
+        <ErrorNotice error={error} />
         <View style={s.actions}>
           <Button title="Full AI briefing" icon="sparkles" onPress={() => generate()} loading={starting} style={{ flex: 1 }} size="lg" />
           <Button title="Chart" icon="stats-chart" variant="secondary" onPress={() => openChart()} size="lg" />

@@ -7,6 +7,8 @@ import { BackButton, Banner, Button, Disclaimer, Loading, TickerAvatar } from ".
 import TechnicalsCard from "../components/TechnicalsCard";
 import EventsCard from "../components/EventsCard";
 import AlertSheet from "../components/AlertSheet";
+import RedFlagsCard from "../components/RedFlagsCard";
+import PositionSizerSheet from "../components/PositionSizerSheet";
 
 /** Quick stock view: chart + technicals (AI read on demand), earnings & insiders, and actions. */
 export default function StockScreen({ ticker, onBack, onBrief, onOptions, onBacktest }) {
@@ -16,6 +18,7 @@ export default function StockScreen({ ticker, onBack, onBrief, onOptions, onBack
   const [techError, setTechError] = useState(null);
   const [explaining, setExplaining] = useState(false);
   const [alertOpen, setAlertOpen] = useState(false);
+  const [sizerOpen, setSizerOpen] = useState(false);
   const [toast, setToast] = useState(null);
   const [briefing, setBriefing] = useState(false);
 
@@ -50,6 +53,7 @@ export default function StockScreen({ ticker, onBack, onBrief, onOptions, onBack
   const tools = [
     { key: "options", label: "Options", sub: "IV, expected move, strategies", section: sections.options, onPress: () => onOptions(ticker) },
     { key: "backtest", label: "Backtest", sub: "Test trading rules", section: sections.backtest, onPress: () => onBacktest(ticker) },
+    { key: "size", label: "Size it", sub: "Shares for your risk", section: sections.risk, onPress: () => setSizerOpen(true) },
     { key: "alert", label: "Alert", sub: "Price, RSI, earnings…", section: sections.alerts, onPress: () => setAlertOpen(true) },
   ];
 
@@ -96,10 +100,13 @@ export default function StockScreen({ ticker, onBack, onBrief, onOptions, onBack
       {techError && <Banner tone="warn">Chart unavailable: {techError}</Banner>}
       {tech && <TechnicalsCard snapshot={tech.snapshot} chart={tech.chart} analysis={tech.analysis} onExplain={explain} explaining={explaining} />}
 
+      <RedFlagsCard ticker={ticker} />
+
       <EventsCard ticker={ticker} />
 
       <Disclaimer>Educational information from market data and SEC filings, not investment advice.</Disclaimer>
 
+      <PositionSizerSheet ticker={ticker} price={snap?.price} visible={sizerOpen} onClose={() => setSizerOpen(false)} />
       <AlertSheet ticker={ticker} price={snap?.price} visible={alertOpen} onClose={() => setAlertOpen(false)} onCreated={() => setToast({ tone: "success", text: "Alert created. Find it in the Alerts tab." })} />
     </ScrollView>
   );
@@ -115,8 +122,8 @@ const useStyles = makeStyles((c) => ({
   change: { flexDirection: "row", alignItems: "center", gap: 3, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 },
   changeText: { fontWeight: "800", fontVariant: ["tabular-nums"] },
   muted: { color: c.muted, marginTop: 4 },
-  tools: { flexDirection: "row", gap: 8, marginTop: 10 },
-  tool: { flex: 1, borderWidth: 1, borderColor: c.border, borderRadius: 16, padding: 12, backgroundColor: c.surfaceAlt },
+  tools: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
+  tool: { flex: 1, flexBasis: 130, borderWidth: 1, borderColor: c.border, borderRadius: 16, padding: 12, backgroundColor: c.surfaceAlt },
   toolIcon: { width: 34, height: 34, borderRadius: 11, alignItems: "center", justifyContent: "center", marginBottom: 8 },
   toolTitle: { color: c.text, fontWeight: "800", fontSize: 14 },
   toolSub: { color: c.muted, fontSize: 11, marginTop: 2 },

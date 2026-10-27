@@ -19,14 +19,25 @@ import AlertsScreen from "./src/screens/AlertsScreen";
 import MarketsScreen from "./src/screens/MarketsScreen";
 import OptionsScreen from "./src/screens/OptionsScreen";
 import BacktestScreen from "./src/screens/BacktestScreen";
+import CopilotScreen from "./src/screens/CopilotScreen";
+import JournalScreen from "./src/screens/JournalScreen";
+import AccountScreen from "./src/screens/AccountScreen";
+import MoreScreen from "./src/screens/MoreScreen";
+import { UpgradeContext } from "./src/components/Upgrade";
 
-const TABS = [
+// Desktop sidebar shows every section; the phone tab bar shows the first five and puts the rest under "More"
+const SECTIONS = [
+  { key: "copilot", label: "Copilot", icon: "sparkles" },
   { key: "research", label: "Research", icon: "search" },
   { key: "markets", label: "Markets", icon: "globe" },
-  { key: "screener", label: "Screener", icon: "funnel" },
   { key: "portfolio", label: "Portfolio", icon: "pie-chart" },
-  { key: "alerts", label: "Alerts", icon: "notifications" },
+  { key: "journal", label: "Journal", icon: "journal", section: "journal", sub: "Trades, stats and AI coach" },
+  { key: "screener", label: "Screener", icon: "funnel", section: "screener", sub: "Find stocks in plain English" },
+  { key: "alerts", label: "Alerts", icon: "notifications", section: "alerts", sub: "Price, indicator and earnings alerts" },
+  { key: "account", label: "Account", icon: "person-circle", section: "account", sub: "Plan, usage and billing" },
 ];
+const PHONE_TABS = [...SECTIONS.slice(0, 4), { key: "more", label: "More", icon: "grid" }];
+const MORE_KEYS = SECTIONS.slice(4).map((x) => x.key);
 
 // Web-only preview switches: ?theme=dark|light forces a scheme, ?landing=1 shows the landing page
 const params = Platform.OS === "web" && typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
@@ -49,7 +60,7 @@ function Shell() {
   const wide = Platform.OS === "web" && width >= 960;
   const [session, setSession] = useState(undefined); // undefined = still loading
   const [authMode, setAuthMode] = useState(params?.get("landing") === "1" ? null : Platform.OS === "web" ? null : "signin");
-  const [tab, setTab] = useState("research");
+  const [tab, setTab] = useState("copilot");
   // Detail screens open on top of the current tab: { type: "briefing" | "stock" | "options" | "backtest", ... }
   const [stack, setStack] = useState([]);
   const [unread, setUnread] = useState(0);
@@ -65,6 +76,10 @@ function Shell() {
   const push = useCallback((screen) => setStack((st) => [...st, screen]), []);
   const pop = useCallback(() => setStack((st) => st.slice(0, -1)), []);
   const openStock = useCallback((ticker) => push({ type: "stock", ticker }), [push]);
+  const openAccount = useCallback(() => {
+    setTab("account");
+    setStack([]);
+  }, []);
   const openBriefing = useCallback((id) => push({ type: "briefing", id }), [push]);
   const briefTicker = useCallback(async (ticker) => {
     const { id } = await api.createBriefing(ticker);
@@ -132,11 +147,17 @@ function Shell() {
   else if (tab === "screener") screen = <ScreenerScreen onOpenStock={openStock} />;
   else if (tab === "portfolio") screen = <PortfolioScreen onOpenStock={openStock} />;
   else if (tab === "alerts") screen = <AlertsScreen onOpenStock={openStock} onUnreadChange={setUnread} />;
+  else if (tab === "copilot") screen = <CopilotScreen onOpenStock={openStock} />;
+  else if (tab === "journal") screen = <JournalScreen onOpenStock={openStock} />;
+  else if (tab === "account") screen = <AccountScreen email={session.user.email} />;
+  else if (tab === "more") screen = <MoreScreen items={SECTIONS.slice(4)} onSelect={goTab} unread={unread} />;
   else screen = <HomeScreen email={session.user.email} onOpen={openBriefing} onOpenStock={openStock} showSignOut={!wide} />;
 
   const content = (
     <View style={s.contentOuter}>
-      <View style={[s.content, wide && s.contentWide]}>{screen}</View>
+      <View style={[s.content, wide && s.contentWide, wide && tab === "copilot" && !stack.length && { maxWidth: 880 }]}>
+        <UpgradeContext.Provider value={openAccount}>{screen}</UpgradeContext.Provider>
+      </View>
     </View>
   );
 
@@ -149,7 +170,7 @@ function Shell() {
             <Logo size={34} />
           </View>
           <View style={{ marginTop: 26, gap: 4 }}>
-            {TABS.map((t) => {
+            {SECTIONS.map((t) => {
               const active = tab === t.key && !stack.length;
               const inSection = tab === t.key;
               return (
@@ -162,7 +183,7 @@ function Shell() {
             })}
           </View>
           <View style={{ flex: 1 }} />
-          <View style={s.account}>
+          <Pressable onPress={() => goTab("account")} style={({ hovered }) => [s.account, hovered && { backgroundColor: c.primarySoft }]}>
             <View style={s.avatar}><Text style={s.avatarText}>{(session.user.email ?? "?").slice(0, 1).toUpperCase()}</Text></View>
             <Text style={s.accountEmail} numberOfLines={1}>{session.user.email}</Text>
             {!localMode && (
@@ -170,7 +191,7 @@ function Shell() {
                 <Ionicons name="log-out-outline" size={19} color={c.muted} />
               </Pressable>
             )}
-          </View>
+          </Pressable>
         </View>
         {content}
       </View>
@@ -182,13 +203,13 @@ function Shell() {
       <StatusBar style={c.dark ? "light" : "dark"} />
       {content}
       <SafeAreaView edges={["bottom"]} style={s.tabBar}>
-        {TABS.map((t) => {
-          const inSection = tab === t.key;
+        {PHONE_TABS.map((t) => {
+          const inSection = tab === t.key || (t.key === "more" && MORE_KEYS.includes(tab));
           return (
             <Pressable key={t.key} style={s.tab} onPress={() => goTab(t.key)} accessibilityRole="tab" accessibilityState={{ selected: inSection }} accessibilityLabel={t.label}>
               <View style={[s.tabIconWrap, inSection && { backgroundColor: c.primarySoft }]}>
                 <Ionicons name={inSection ? t.icon : `${t.icon}-outline`} size={21} color={inSection ? c.primary : c.muted} />
-                {t.key === "alerts" && unread > 0 && <View style={s.badge}><Text style={s.badgeText}>{unread > 9 ? "9+" : unread}</Text></View>}
+                {t.key === "more" && unread > 0 && <View style={s.badge}><Text style={s.badgeText}>{unread > 9 ? "9+" : unread}</Text></View>}
               </View>
               <Text style={[s.tabLabel, inSection && { color: c.primary }]}>{t.label}</Text>
             </Pressable>

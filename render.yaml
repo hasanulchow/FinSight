@@ -41,6 +41,14 @@ services:
         value: "10"
       - key: CRON_SECRET # protects POST /jobs/run for external schedulers
         generateValue: true
+      - key: STRIPE_SECRET_KEY # billing (optional): without Stripe keys everyone stays on the Free plan
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRICE_PRO # Stripe price id of the Pro subscription
+        sync: false
+      - key: APP_URL # public URL, used for Stripe redirects
+        sync: false
       # Baked into the web bundle at build time: Supabase URL + anon/publishable key only
       - key: EXPO_PUBLIC_SUPABASE_URL
         sync: false

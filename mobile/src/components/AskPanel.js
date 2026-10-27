@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-nativ
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../lib/api";
 import { makeStyles, useTheme } from "../theme";
+import { ErrorNotice } from "./Upgrade";
 import { Chip, SectionCard } from "./ui";
 
 const SUGGESTIONS = ["What are the biggest risks?", "How does it make money?", "What did management say about the outlook?"];
@@ -32,7 +33,7 @@ export default function AskPanel({ briefingId }) {
       const { question: saved, answer } = await api.ask(briefingId, q);
       setMessages((m) => [...m.filter((x) => !String(x.id).startsWith("pending-")), saved, answer]);
     } catch (e) {
-      setError(e.message);
+      setError(e);
       setMessages((m) => m.filter((x) => !String(x.id).startsWith("pending-")));
       setQuestion(q);
     }
@@ -73,7 +74,7 @@ export default function AskPanel({ briefingId }) {
           <Text style={s.muted}>Searching the filing…</Text>
         </View>
       )}
-      {error && <Text style={s.error}>{error}</Text>}
+      {error && (error.upgrade ? <ErrorNotice error={error} /> : <Text style={s.error}>{error.message ?? error}</Text>)}
 
       <View style={s.inputRow}>
         <TextInput

@@ -119,6 +119,13 @@ function buildSections(c) {
     portfolio: s("violet", "pie-chart-outline"),
     screener: s("teal", "funnel-outline"),
     alerts: s("amber", "notifications-outline"),
+    copilot: s("violet", "sparkles-outline"),
+    journal: s("emerald", "journal-outline"),
+    coach: s("fuchsia", "school-outline"),
+    risk: s("orange", "calculator-outline"),
+    redflags: s("rose", "flag-outline"),
+    benchmark: s("blue", "speedometer-outline"),
+    account: s("indigo", "person-circle-outline"),
   };
 }
 

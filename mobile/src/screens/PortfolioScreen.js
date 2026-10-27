@@ -4,6 +4,8 @@ import Svg, { Circle } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../lib/api";
 import { formatMoney, makeStyles, useTheme } from "../theme";
+import BenchmarkCard from "../components/BenchmarkCard";
+import { UpgradeCard } from "../components/Upgrade";
 import { Banner, Bullets, Button, Disclaimer, EmptyState, Input, Loading, PageHeader, Pill, SectionCard, Stat, TickerAvatar } from "../components/ui";
 
 const CSV_EXAMPLE = "Symbol,Quantity,Average Cost\nAAPL,10,150\nMSFT,5,300\nNVDA,20,";
@@ -114,6 +116,8 @@ export default function PortfolioScreen({ onOpenStock }) {
             </View>
           </SectionCard>
 
+          <BenchmarkCard refreshKey={xray.positions?.length} />
+
           <SectionCard title="AI X-ray" section={{ ...sec, icon: "sparkles-outline" }}>
             {a ? (
               <>
@@ -130,6 +134,8 @@ export default function PortfolioScreen({ onOpenStock }) {
               </>
             ) : analyzing ? (
               <Loading text="Analyzing your portfolio…" />
+            ) : xray.upgrade ? (
+              <UpgradeCard text={xray.analysis_error} />
             ) : (
               <Text style={s.muted}>{xray.analysis_error ?? "AI analysis unavailable right now. Pull to refresh."}</Text>
             )}
