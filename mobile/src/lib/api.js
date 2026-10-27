@@ -22,7 +22,7 @@ async function send(path, options, token) {
     ...options,
     headers: { "Content-Type": "application/json", ...(token && { Authorization: `Bearer ${token}` }), ...options.headers },
   });
-  const body = await res.json().catch(() => ({}));
+  const body = res.status === 204 ? {} : await res.json().catch(() => ({}));
   // The API rejected the token (expired, revoked, or from another Supabase project): back to login.
   if (res.status === 401 && token) await supabase.auth.signOut();
   // 402 + upgrade: a Free plan limit was hit; screens show an upgrade prompt for these
@@ -105,4 +105,49 @@ export const api = {
   account: () => request("/account"),
   checkout: (returnUrl) => request("/billing/checkout", { method: "POST", body: JSON.stringify({ return_url: returnUrl }) }),
   billingPortal: (returnUrl) => request("/billing/portal", { method: "POST", body: JSON.stringify({ return_url: returnUrl }) }),
+
+  // Account, onboarding, referrals
+  settings: () => request("/settings"),
+  updateSettings: (fields) => request("/settings", { method: "PATCH", body: JSON.stringify(fields) }),
+  onboarding: (data) => request("/onboarding", { method: "POST", body: JSON.stringify(data) }),
+  referrals: () => request("/referrals"),
+  deleteAccount: () => request("/account", { method: "DELETE", body: JSON.stringify({ confirm: "DELETE" }) }),
+  track: (event, properties) => request("/events", { method: "POST", body: JSON.stringify({ event, properties }) }).catch(() => {}),
+
+  // Watchlist + thesis tracker, morning brief
+  watchlist: () => request("/watchlist"),
+  addWatch: (ticker, thesis) => request("/watchlist", { method: "POST", body: JSON.stringify({ ticker, thesis }) }),
+  updateWatch: (id, thesis) => request(`/watchlist/${id}`, { method: "PATCH", body: JSON.stringify({ thesis }) }),
+  deleteWatch: (id) => request(`/watchlist/${id}`, { method: "DELETE" }),
+  checkThesis: (id) => request(`/watchlist/${id}/check`, { method: "POST" }),
+  brief: () => request("/brief"),
+  generateBrief: () => request("/brief/generate", { method: "POST" }),
+
+  // Automations (scheduled Copilot tasks)
+  automations: () => request("/automations"),
+  createAutomation: (task) => request("/automations", { method: "POST", body: JSON.stringify(task) }),
+  updateAutomation: (id, fields) => request(`/automations/${id}`, { method: "PATCH", body: JSON.stringify(fields) }),
+  deleteAutomation: (id) => request(`/automations/${id}`, { method: "DELETE" }),
+  runAutomation: (id) => request(`/automations/${id}/run`, { method: "POST" }),
+
+  // Trading rules, option P/L, tax
+  rules: () => request("/rules"),
+  saveRules: (rules) => request("/rules", { method: "PUT", body: JSON.stringify({ rules }) }),
+  precheck: (trade) => request("/journal/precheck", { method: "POST", body: JSON.stringify(trade) }),
+  optionPnl: (input) => request("/options/pnl-explain", { method: "POST", body: JSON.stringify(input) }),
+  tax: (year) => request(`/tax/summary${year ? `?year=${year}` : ""}`),
+
+  // Broker sync
+  broker: () => request("/broker"),
+  brokerConnect: (returnUrl) => request("/broker/connect", { method: "POST", body: JSON.stringify({ return_url: returnUrl }) }),
+  brokerSync: () => request("/broker/sync", { method: "POST" }),
+  brokerDisconnect: () => request("/broker", { method: "DELETE" }),
+
+  // Sharing (the public read needs no session)
+  shareBriefing: (id) => request(`/briefings/${id}/share`, { method: "POST" }),
+  shareJournal: () => request("/journal/share", { method: "POST" }),
+  publicShare: (token) => send(`/share/${encodeURIComponent(token)}`, {}),
+
+  // Admin
+  adminMetrics: () => request("/admin/metrics"),
 };

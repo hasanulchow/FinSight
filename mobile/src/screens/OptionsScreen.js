@@ -3,8 +3,9 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-nati
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../lib/api";
 import { makeStyles, useTheme } from "../theme";
-import { BackButton, Banner, Bullets, Chip, Disclaimer, Loading, Pill, SectionCard, Segmented, Stat } from "../components/ui";
+import { BackButton, Banner, Bullets, Button, Chip, Disclaimer, Loading, Pill, SectionCard, Segmented, Stat } from "../components/ui";
 import PayoffChart from "../components/PayoffChart";
+import OptionPnlSheet from "../components/OptionPnlSheet";
 
 const STRATS = [
   ["long_call", "Long call"], ["long_put", "Long put"], ["covered_call", "Covered call"], ["cash_secured_put", "Cash-secured put"],
@@ -27,6 +28,7 @@ export default function OptionsScreen({ ticker, onBack }) {
   const [strategy, setStrategy] = useState(null);
   const [stratBusy, setStratBusy] = useState(false);
   const [metric, setMetric] = useState("price");
+  const [pnlOpen, setPnlOpen] = useState(false);
   const REGIME = { low: c.gain, normal: c.primary, elevated: c.warn, high: c.loss };
 
   const load = useCallback(async (exp) => {
@@ -74,7 +76,11 @@ export default function OptionsScreen({ ticker, onBack }) {
 
   return (
     <ScrollView contentContainerStyle={s.scroll}>
-      <BackButton onPress={onBack} />
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <BackButton onPress={onBack} />
+        <Button title="Explain my P/L" icon="help-circle-outline" size="sm" variant="ghost" onPress={() => setPnlOpen(true)} />
+      </View>
+      <OptionPnlSheet visible={pnlOpen} onClose={() => setPnlOpen(false)} preset={{ ticker, expiration: ov?.expiration, strike: ov?.atm_strike }} />
 
       <View style={s.hero}>
         <View style={s.heroTop}>

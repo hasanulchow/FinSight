@@ -117,9 +117,81 @@
     {
       "source": "/risk/:path*",
       "destination": "/api"
+    },
+    {
+      "source": "/settings",
+      "destination": "/api"
+    },
+    {
+      "source": "/onboarding",
+      "destination": "/api"
+    },
+    {
+      "source": "/referrals",
+      "destination": "/api"
+    },
+    {
+      "source": "/account/:path*",
+      "destination": "/api"
+    },
+    {
+      "source": "/events",
+      "destination": "/api"
+    },
+    {
+      "source": "/watchlist",
+      "destination": "/api"
+    },
+    {
+      "source": "/watchlist/:path*",
+      "destination": "/api"
+    },
+    {
+      "source": "/brief",
+      "destination": "/api"
+    },
+    {
+      "source": "/brief/:path*",
+      "destination": "/api"
+    },
+    {
+      "source": "/automations",
+      "destination": "/api"
+    },
+    {
+      "source": "/automations/:path*",
+      "destination": "/api"
+    },
+    {
+      "source": "/rules",
+      "destination": "/api"
+    },
+    {
+      "source": "/tax/:path*",
+      "destination": "/api"
+    },
+    {
+      "source": "/broker",
+      "destination": "/api"
+    },
+    {
+      "source": "/broker/:path*",
+      "destination": "/api"
+    },
+    {
+      "source": "/share/:path*",
+      "destination": "/api"
+    },
+    {
+      "source": "/admin/:path*",
+      "destination": "/api"
     }
   ],
   "crons": [
+    {
+      "path": "/jobs/run",
+      "schedule": "0 12 * * 1-5"
+    },
     {
       "path": "/jobs/run",
       "schedule": "30 21 * * 1-5"

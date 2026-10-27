@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { Linking, Platform, RefreshControl, ScrollView, Text, View } from "react-native";
+import { Linking, Platform, Pressable, RefreshControl, ScrollView, Switch, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { api } from "../lib/api";
 import { localMode, supabase } from "../lib/supabase";
 import { makeStyles, useTheme } from "../theme";
-import { Banner, Button, Loading, PageHeader, Pill, SectionCard } from "../components/ui";
+import { Banner, Button, Input, Loading, PageHeader, Pill, SectionCard } from "../components/ui";
+import { shareLink } from "../lib/share";
 
 const FEATURE_LABELS = {
   copilot: ["Copilot messages", "sparkles-outline"],
@@ -24,7 +25,7 @@ const PRO_PERKS = [
 const returnUrl = () => (Platform.OS === "web" && typeof window !== "undefined" ? window.location.origin + window.location.pathname : undefined);
 
 /** Plan, today's usage, upgrade to Pro (Stripe Checkout) and manage billing (Stripe portal). */
-export default function AccountScreen({ email }) {
+export default function AccountScreen({ email, onOpenLegal, onOpenAdmin }) {
   const { c, sections } = useTheme();
   const s = useStyles();
   const [account, setAccount] = useState(null);
@@ -32,14 +33,21 @@ export default function AccountScreen({ email }) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [settings, setSettings] = useState(null);
+  const [referral, setReferral] = useState(null);
+  const [notice, setNotice] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null); // null = hidden, string = typed text
+  const [deleting, setDeleting] = useState(false);
   const billingParam = Platform.OS === "web" && typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("billing") : null;
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [a, p] = await Promise.all([api.account(), api.plans()]);
+      const [a, p, st, r] = await Promise.all([api.account(), api.plans(), api.settings().catch(() => null), api.referrals().catch(() => null)]);
       setAccount(a);
       setPlans(p);
+      setSettings(st);
+      setReferral(r);
       setError(null);
     } catch (e) {
       setError(e.message);
@@ -50,6 +58,30 @@ export default function AccountScreen({ email }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  async function toggleBrief(v) {
+    setSettings((st) => ({ ...st, brief_enabled: v }));
+    await api.updateSettings({ brief_enabled: v }).catch((e) => setError(e.message));
+  }
+
+  async function invite() {
+    const how = await shareLink({ title: "Join me on FinSight", message: `I use FinSight for stock research and my trading journal. Join with my link and we both get ${referral.days_per_signup} days of Pro:`, url: referral.link });
+    if (how === "copied") setNotice("Invite link copied to the clipboard");
+  }
+
+  async function deleteAccount() {
+    setDeleting(true);
+    try {
+      await api.deleteAccount();
+      if (!localMode) await supabase.auth.signOut();
+      else setNotice("Local data deleted.");
+      setConfirmDelete(null);
+      load();
+    } catch (e) {
+      setError(e.message);
+    }
+    setDeleting(false);
+  }
 
   async function go(fn) {
     setBusy(true);
@@ -83,6 +115,8 @@ export default function AccountScreen({ email }) {
               <View style={{ flex: 1 }}>
                 <Text style={[s.planEyebrow, pro && { color: "rgba(255,255,255,0.8)" }]}>Current plan</Text>
                 <Text style={[s.planName, pro && { color: "#FFFFFF" }]}>FinSight {account.plan_name}</Text>
+                {account.pro_source === "referral" && <Text style={[s.planSub, { color: "rgba(255,255,255,0.85)" }]}>Free Pro from referrals until {new Date(account.pro_until).toLocaleDateString()}</Text>}
+                {account.pro_source === "trial" && <Text style={[s.planSub, { color: "rgba(255,255,255,0.85)" }]}>Free trial</Text>}
                 {sub?.current_period_end && (
                   <Text style={[s.planSub, pro && { color: "rgba(255,255,255,0.85)" }]}>
                     {sub.cancel_at_period_end ? "Ends" : "Renews"} {new Date(sub.current_period_end).toLocaleDateString()}
@@ -137,7 +171,10 @@ export default function AccountScreen({ email }) {
                 </View>
               ))}
               {account.billing_enabled ? (
-                <Button title="Upgrade to Pro" icon="rocket" size="lg" onPress={() => go(api.checkout)} loading={busy} style={{ marginTop: 16 }} />
+                <>
+                <Button title={account.trial_days > 0 ? `Start ${account.trial_days}-day free trial` : "Upgrade to Pro"} icon="rocket" size="lg" onPress={() => { api.track("upgrade_clicked", { trial: account.trial_days }); go(api.checkout); }} loading={busy} style={{ marginTop: 16 }} />
+                {account.trial_days > 0 && <Text style={[s.muted, { textAlign: "center", marginTop: 8 }]}>Then {proPlan.price_label}. Cancel anytime before the trial ends and you won't be charged.</Text>}
+                </>
               ) : (
                 <Banner tone="info">Upgrades aren't switched on for this server yet. {localMode ? "Local mode: set DEV_PLAN=pro or free to test either plan." : "The owner needs to add Stripe keys."}</Banner>
               )}
@@ -145,7 +182,68 @@ export default function AccountScreen({ email }) {
             </View>
           )}
 
+          {notice && <Banner tone="success">{notice}</Banner>}
+
+          {referral && (
+            <SectionCard title="Invite friends, get Pro" subtitle={`You both get ${referral.days_per_signup} days of Pro per signup`} section={sections.coach}>
+              <View style={s.refRow}>
+                <View style={s.refCode}>
+                  <Text style={s.muted}>Your code</Text>
+                  <Text style={s.code}>{referral.code}</Text>
+                </View>
+                <View style={s.refCode}>
+                  <Text style={s.muted}>Friends joined</Text>
+                  <Text style={s.code}>{referral.signups}</Text>
+                </View>
+              </View>
+              <Button title="Share invite link" icon="gift-outline" onPress={invite} style={{ marginTop: 12 }} />
+            </SectionCard>
+          )}
+
+          {settings && (
+            <SectionCard title="Notifications" section={sections.alerts}>
+              <View style={s.settingRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.settingLabel}>Morning brief</Text>
+                  <Text style={s.muted}>An AI summary of your stocks every weekday before the open</Text>
+                </View>
+                <Switch value={settings.brief_enabled !== false} onValueChange={toggleBrief} trackColor={{ true: c.primary, false: c.borderStrong }} />
+              </View>
+            </SectionCard>
+          )}
+
+          <SectionCard title="Legal & privacy" section={sections.quality}>
+            {[["terms", "Terms of Service"], ["privacy", "Privacy Policy"], ["disclaimer", "Risk Disclaimer"]].map(([k, label]) => (
+              <Pressable key={k} onPress={() => onOpenLegal?.(k)} style={s.linkRow}>
+                <Text style={s.settingLabel}>{label}</Text>
+                <Ionicons name="chevron-forward" size={16} color={c.muted} />
+              </Pressable>
+            ))}
+            {settings?.is_admin && onOpenAdmin && (
+              <Pressable onPress={onOpenAdmin} style={s.linkRow}>
+                <Text style={[s.settingLabel, { color: c.primary }]}>Business dashboard (admin)</Text>
+                <Ionicons name="stats-chart" size={16} color={c.primary} />
+              </Pressable>
+            )}
+          </SectionCard>
+
           {!localMode && <Button title="Sign out" icon="log-out-outline" variant="ghost" onPress={() => supabase.auth.signOut()} style={{ marginTop: 20 }} />}
+
+          <View style={s.danger}>
+            <Text style={s.settingLabel}>Delete account</Text>
+            <Text style={s.muted}>Cancels any subscription, disconnects your broker and permanently deletes your data. This can't be undone.</Text>
+            {confirmDelete == null ? (
+              <Button title="Delete my account" variant="danger" icon="trash-outline" size="sm" onPress={() => setConfirmDelete("")} style={{ marginTop: 10, alignSelf: "flex-start" }} />
+            ) : (
+              <View style={{ marginTop: 10, gap: 8 }}>
+                <Input value={confirmDelete} onChangeText={setConfirmDelete} placeholder="Type DELETE to confirm" autoCapitalize="characters" />
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  <Button title="Cancel" variant="ghost" size="sm" onPress={() => setConfirmDelete(null)} />
+                  <Button title="Permanently delete" variant="danger" size="sm" onPress={deleteAccount} disabled={confirmDelete !== "DELETE"} loading={deleting} />
+                </View>
+              </View>
+            )}
+          </View>
         </>
       )}
     </ScrollView>
@@ -166,6 +264,13 @@ const useStyles = makeStyles((c) => ({
   track: { height: 8, borderRadius: 4, backgroundColor: c.surfaceAlt, overflow: "hidden" },
   fill: { height: 8, borderRadius: 4 },
   muted: { color: c.muted, fontSize: 12, lineHeight: 17 },
+  refRow: { flexDirection: "row", gap: 10 },
+  refCode: { flex: 1, backgroundColor: c.surfaceAlt, borderRadius: 12, padding: 12 },
+  code: { color: c.text, fontSize: 20, fontWeight: "800", letterSpacing: 1, marginTop: 2 },
+  settingRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  settingLabel: { color: c.text, fontSize: 15, fontWeight: "700" },
+  linkRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12, borderTopWidth: 1, borderTopColor: c.border },
+  danger: { marginTop: 24, padding: 16, borderRadius: 18, borderWidth: 1, borderColor: c.lossSoft, backgroundColor: c.surface },
   upsell: { marginTop: 14, borderRadius: 24, padding: 22, borderWidth: 2, borderColor: c.primary, backgroundColor: c.surface },
   upsellHead: { flexDirection: "row", alignItems: "flex-start", marginBottom: 12 },
   upsellTitle: { color: c.text, fontSize: 24, fontWeight: "800", letterSpacing: -0.5, marginTop: 10 },

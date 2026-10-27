@@ -20,7 +20,7 @@ export async function listTrades(userId) {
   return data;
 }
 
-const FIELDS = ["ticker", "side", "instrument", "quantity", "entry_price", "entry_date", "exit_price", "exit_date", "stop_price", "target_price", "setup", "emotion", "notes", "fees"];
+const FIELDS = ["ticker", "side", "instrument", "quantity", "entry_price", "entry_date", "exit_price", "exit_date", "stop_price", "target_price", "setup", "emotion", "notes", "fees", "external_id"];
 
 /** Validates and normalizes a trade from user input. Throws 400 with a readable message. */
 export function cleanTrade(input, { partial = false } = {}) {

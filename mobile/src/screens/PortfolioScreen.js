@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { api } from "../lib/api";
 import { formatMoney, makeStyles, useTheme } from "../theme";
 import BenchmarkCard from "../components/BenchmarkCard";
+import BrokerCard from "../components/BrokerCard";
 import { UpgradeCard } from "../components/Upgrade";
 import { Banner, Bullets, Button, Disclaimer, EmptyState, Input, Loading, PageHeader, Pill, SectionCard, Stat, TickerAvatar } from "../components/ui";
 
@@ -12,7 +13,7 @@ const CSV_EXAMPLE = "Symbol,Quantity,Average Cost\nAAPL,10,150\nMSFT,5,300\nNVDA
 const DONUT_HUES = ["indigo", "sky", "emerald", "amber", "rose", "violet", "teal", "orange", "fuchsia", "blue"];
 
 /** Portfolio X-ray: holdings, allocation, concentration, chart health, upcoming earnings, AI read. */
-export default function PortfolioScreen({ onOpenStock }) {
+export default function PortfolioScreen({ onOpenStock, onOpenTax }) {
   const { c, sections } = useTheme();
   const s = useStyles();
   const sec = sections.portfolio;
@@ -85,6 +86,8 @@ export default function PortfolioScreen({ onOpenStock }) {
       {loading && !xray && <Loading text="Pricing your holdings…" />}
       {error && <Banner tone="error">{error}</Banner>}
 
+      <BrokerCard onSynced={load} />
+
       {empty && (
         <EmptyState
           icon="pie-chart-outline"
@@ -117,6 +120,19 @@ export default function PortfolioScreen({ onOpenStock }) {
           </SectionCard>
 
           <BenchmarkCard refreshKey={xray.positions?.length} />
+
+          {onOpenTax && (
+            <Pressable onPress={onOpenTax} style={({ hovered }) => [s.taxLink, hovered && { borderColor: sections.redflags.color }]}>
+              <View style={[s.taxIcon, { backgroundColor: sections.redflags.soft }]}>
+                <Ionicons name="receipt-outline" size={18} color={sections.redflags.color} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.taxTitle}>Tax center</Text>
+                <Text style={s.muted}>Realized gains, wash sales and tax-loss harvesting ideas</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={c.muted} />
+            </Pressable>
+          )}
 
           <SectionCard title="AI X-ray" section={{ ...sec, icon: "sparkles-outline" }}>
             {a ? (
@@ -219,7 +235,7 @@ function Sheet({ visible, onClose, title, children }) {
   const { c } = useTheme();
   const s = useStyles();
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal supportedOrientations={["portrait", "landscape"]} visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={s.sheetWrap}>
         <Pressable style={s.backdrop} onPress={onClose} accessibilityLabel="Close" />
         <View style={s.sheet}>
@@ -309,6 +325,9 @@ function AddModal({ visible, onClose, onDone }) {
 }
 
 const useStyles = makeStyles((c) => ({
+  taxLink: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 18, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, marginTop: 14 },
+  taxIcon: { width: 36, height: 36, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  taxTitle: { color: c.text, fontWeight: "800", fontSize: 15 },
   scroll: { padding: 16, paddingBottom: 60 },
   dayRow: { flexDirection: "row", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: -6, marginBottom: 4 },
   change: { flexDirection: "row", alignItems: "center", gap: 3, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },

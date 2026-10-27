@@ -8,6 +8,7 @@ import TechnicalsCard from "../components/TechnicalsCard";
 import EventsCard from "../components/EventsCard";
 import AskPanel from "../components/AskPanel";
 import AlertSheet from "../components/AlertSheet";
+import { shareLink } from "../lib/share";
 
 // Pipeline steps, matched against the progress text the API writes (server/src/agents/orchestrator.js)
 const STEPS = [
@@ -28,6 +29,17 @@ export default function BriefingScreen({ id, onBack }) {
   const [error, setError] = useState(null);
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertCreated, setAlertCreated] = useState(false);
+  const [shared, setShared] = useState(null);
+
+  async function share() {
+    try {
+      const { url } = await api.shareBriefing(id);
+      const how = await shareLink({ title: `${briefing.ticker} briefing`, message: `AI briefing on ${briefing.ticker} from FinSight:`, url });
+      setShared(how === "copied" ? "Link copied" : null);
+    } catch (e) {
+      setShared(e.message);
+    }
+  }
 
   // Poll while the agents are running
   useEffect(() => {
@@ -62,7 +74,13 @@ export default function BriefingScreen({ id, onBack }) {
 
   return (
     <ScrollView contentContainerStyle={s.scroll}>
-      <BackButton onPress={onBack} />
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <BackButton onPress={onBack} />
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          {shared ? <Text style={s.muted}>{shared}</Text> : null}
+          <Button title="Share" icon="share-social-outline" size="sm" variant="ghost" onPress={share} />
+        </View>
+      </View>
 
       {/* Hero */}
       <View style={s.hero}>

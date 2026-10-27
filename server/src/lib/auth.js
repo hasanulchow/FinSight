@@ -1,11 +1,12 @@
 import { config, LOCAL_USER } from "../config.js";
 import { supabase } from "./supabase.js";
+import { withAiUser } from "./aiUsage.js";
 
 // Express middleware: verifies the Supabase JWT sent by the mobile app.
 export async function requireUser(req, res, next) {
   if (config.localMode) {
     req.user = LOCAL_USER;
-    return next();
+    return withAiUser(req.user.id, next);
   }
 
   const header = req.headers.authorization || "";
@@ -25,5 +26,6 @@ export async function requireUser(req, res, next) {
   if (error || !data?.user) return res.status(401).json({ error: "Invalid or expired session" });
 
   req.user = data.user;
-  next();
+  // Claude calls made while handling this request (and its background work) are billed to this user
+  withAiUser(req.user.id, next);
 }

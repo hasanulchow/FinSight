@@ -51,7 +51,8 @@ export function PageHeader({ eyebrow, title, subtitle, right }) {
   const s = useStyles();
   return (
     <View style={s.pageHeader}>
-      <View style={{ flex: 1 }}>
+      {/* Title keeps at least 220pt; actions wrap onto their own line on narrow phones */}
+      <View style={{ flex: 1, minWidth: 220 }}>
         {eyebrow ? <Text style={s.eyebrow}>{eyebrow}</Text> : null}
         <Text style={s.pageTitle}>{title}</Text>
         {subtitle ? <Text style={s.pageSubtitle}>{subtitle}</Text> : null}
@@ -285,7 +286,7 @@ const useStyles = makeStyles((c) => ({
   iconBadge: { width: 34, height: 34, borderRadius: 11, alignItems: "center", justifyContent: "center" },
   sectionTitle: { ...type.heading, color: c.text },
   sectionSubtitle: { color: c.muted, fontSize: 12, marginTop: 1 },
-  pageHeader: { flexDirection: "row", alignItems: "flex-end", gap: 12, paddingTop: 8, paddingBottom: 14 },
+  pageHeader: { flexDirection: "row", flexWrap: "wrap", alignItems: "flex-end", gap: 12, paddingTop: 8, paddingBottom: 14 },
   eyebrow: { ...type.caption, color: c.primary, marginBottom: 4 },
   pageTitle: { ...type.title, color: c.text },
   pageSubtitle: { color: c.textSecondary, fontSize: 15, marginTop: 4, lineHeight: 21 },
@@ -322,7 +323,7 @@ const useStyles = makeStyles((c) => ({
   emptyTitle: { ...type.heading, color: c.text, marginTop: 12, textAlign: "center" },
   emptyText: { color: c.textSecondary, marginTop: 6, textAlign: "center", lineHeight: 20, maxWidth: 360 },
   inputRow: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderColor: c.border, borderRadius: 14, paddingHorizontal: 14, backgroundColor: c.surfaceAlt },
-  input: { flex: 1, paddingVertical: 13, fontSize: 16, color: c.text, outlineStyle: "none" },
+  input: { flex: 1, minWidth: 0, width: "100%", paddingVertical: 13, fontSize: 16, color: c.text, outlineStyle: "none" }, // minWidth 0: web inputs otherwise refuse to shrink below ~180px
   loading: { flexDirection: "row", gap: 10, alignItems: "center", justifyContent: "center", paddingVertical: 24 },
   loadingText: { color: c.textSecondary, fontSize: 14, flexShrink: 1 },
   disclaimer: { color: c.muted, fontSize: 11, marginTop: 24, textAlign: "center", lineHeight: 16 },

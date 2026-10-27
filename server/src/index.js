@@ -15,6 +15,7 @@ import { indexFiling, searchFiling } from "./lib/retrieval.js";
 import { evalSummary } from "./lib/evalSummary.js";
 import { registerTradingRoutes } from "./routes/trading.js";
 import { registerSaasRoutes } from "./routes/saas.js";
+import { registerGrowthRoutes } from "./routes/growth.js";
 import { checkQuota, recordUsage } from "./lib/plans.js";
 import { startScheduler } from "./lib/jobs.js";
 
@@ -298,6 +299,7 @@ app.get("/evals/summary", requireUser, async (req, res) => {
 registerTradingRoutes(app);
 // Copilot, journal, risk tools, red flags, plans and billing
 registerSaasRoutes(app);
+registerGrowthRoutes(app);
 
 // Vercel imports the app as a function (api/index.js); everywhere else, run a normal server.
 if (!process.env.VERCEL) {

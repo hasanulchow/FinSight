@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Platform, Pressable, Text, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LOCAL_SESSION, localMode, supabase } from "./src/lib/supabase";
 import { api } from "./src/lib/api";
 import { registerForPush, onNotificationTap } from "./src/lib/push";
+import { rememberRef } from "./src/lib/share";
 import { makeStyles, ThemeProvider, useTheme } from "./src/theme";
 import { Logo } from "./src/components/ui";
 import LandingScreen from "./src/screens/LandingScreen";
@@ -23,23 +24,32 @@ import CopilotScreen from "./src/screens/CopilotScreen";
 import JournalScreen from "./src/screens/JournalScreen";
 import AccountScreen from "./src/screens/AccountScreen";
 import MoreScreen from "./src/screens/MoreScreen";
+import TodayScreen from "./src/screens/TodayScreen";
+import AutomationsScreen from "./src/screens/AutomationsScreen";
+import TaxScreen from "./src/screens/TaxScreen";
+import AdminScreen from "./src/screens/AdminScreen";
+import LegalScreen from "./src/screens/LegalScreen";
+import OnboardingScreen from "./src/screens/OnboardingScreen";
+import ShareScreen from "./src/screens/ShareScreen";
 import { UpgradeContext } from "./src/components/Upgrade";
 
-// Desktop sidebar shows every section; the phone tab bar shows the first five and puts the rest under "More"
+// The sidebar (tablets and desktop) shows every section; the phone tab bar shows the first four plus "More"
 const SECTIONS = [
+  { key: "today", label: "Today", icon: "sunny" },
   { key: "copilot", label: "Copilot", icon: "sparkles" },
   { key: "research", label: "Research", icon: "search" },
-  { key: "markets", label: "Markets", icon: "globe" },
   { key: "portfolio", label: "Portfolio", icon: "pie-chart" },
-  { key: "journal", label: "Journal", icon: "journal", section: "journal", sub: "Trades, stats and AI coach" },
+  { key: "markets", label: "Markets", icon: "globe", section: "markets", sub: "Indexes, sectors, movers and heatmap" },
+  { key: "journal", label: "Journal", icon: "journal", section: "journal", sub: "Trades, stats, rules and AI coach" },
   { key: "screener", label: "Screener", icon: "funnel", section: "screener", sub: "Find stocks in plain English" },
   { key: "alerts", label: "Alerts", icon: "notifications", section: "alerts", sub: "Price, indicator and earnings alerts" },
-  { key: "account", label: "Account", icon: "person-circle", section: "account", sub: "Plan, usage and billing" },
+  { key: "tax", label: "Tax center", icon: "receipt", section: "redflags", sub: "Realized gains, wash sales, harvesting" },
+  { key: "account", label: "Account", icon: "person-circle", section: "account", sub: "Plan, invites, settings and privacy" },
 ];
+const ADMIN = { key: "admin", label: "Admin", icon: "stats-chart", section: "benchmark", sub: "Users, revenue and AI cost" };
 const PHONE_TABS = [...SECTIONS.slice(0, 4), { key: "more", label: "More", icon: "grid" }];
-const MORE_KEYS = SECTIONS.slice(4).map((x) => x.key);
 
-// Web-only preview switches: ?theme=dark|light forces a scheme, ?landing=1 shows the landing page
+// Web-only URL switches: ?theme=dark|light, ?landing=1 (landing page), ?share=TOKEN (public share), ?legal=terms|privacy|disclaimer
 const params = Platform.OS === "web" && typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
 const forcedScheme = params?.get("theme") === "dark" ? "dark" : params?.get("theme") === "light" ? "light" : undefined;
 
@@ -57,15 +67,20 @@ function Shell() {
   const { c } = useTheme();
   const s = useStyles();
   const { width } = useWindowDimensions();
-  const wide = Platform.OS === "web" && width >= 960;
+  // Tablets (iPad, Android tablets) and desktop browsers get the sidebar layout
+  const wide = width >= 768;
   const [session, setSession] = useState(undefined); // undefined = still loading
   const [authMode, setAuthMode] = useState(params?.get("landing") === "1" ? null : Platform.OS === "web" ? null : "signin");
-  const [tab, setTab] = useState("copilot");
-  // Detail screens open on top of the current tab: { type: "briefing" | "stock" | "options" | "backtest", ... }
+  const [tab, setTab] = useState("today");
+  // Detail screens open on top of the current tab: { type: "briefing" | "stock" | "options" | "backtest" | "automations" | "legal", ... }
   const [stack, setStack] = useState([]);
   const [unread, setUnread] = useState(0);
+  const [settings, setSettings] = useState(null);
+  const [publicView, setPublicView] = useState(params?.get("share") ? { type: "share", token: params.get("share") } : params?.get("legal") ? { type: "legal", doc: params.get("legal") } : null);
+  const [onboardingLegal, setOnboardingLegal] = useState(null);
 
   useEffect(() => {
+    rememberRef();
     if (localMode && params?.get("landing") !== "1") return setSession(LOCAL_SESSION);
     if (localMode) return setSession(null);
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -76,28 +91,30 @@ function Shell() {
   const push = useCallback((screen) => setStack((st) => [...st, screen]), []);
   const pop = useCallback(() => setStack((st) => st.slice(0, -1)), []);
   const openStock = useCallback((ticker) => push({ type: "stock", ticker }), [push]);
-  const openAccount = useCallback(() => {
-    setTab("account");
+  const goTab = useCallback((key) => {
+    setTab(key);
     setStack([]);
   }, []);
+  const openAccount = useCallback(() => {
+    api.track("upgrade_viewed");
+    goTab("account");
+  }, [goTab]);
   const openBriefing = useCallback((id) => push({ type: "briefing", id }), [push]);
+  const openLegal = useCallback((doc) => push({ type: "legal", doc }), [push]);
   const briefTicker = useCallback(async (ticker) => {
     const { id } = await api.createBriefing(ticker);
     setTab("research");
     setStack([{ type: "briefing", id }]);
   }, []);
-  const goTab = (key) => {
-    setTab(key);
-    setStack([]);
-  };
 
-  // Once signed in: register for push, open stocks from tapped notifications, keep the unread badge fresh
+  // Once signed in: load settings (onboarding gate), register for push, keep the unread badge fresh
   useEffect(() => {
     if (!session) return;
+    api.settings().then(setSettings).catch(() => setSettings({ needs_onboarding: false }));
     registerForPush();
     const unsubscribe = onNotificationTap((ticker) => {
-      setTab("alerts");
-      setStack([{ type: "stock", ticker }]);
+      setTab(ticker ? "alerts" : "today");
+      setStack(ticker ? [{ type: "stock", ticker }] : []);
     });
     const refresh = () => api.notifications().then((n) => setUnread(n.filter((x) => !x.read).length)).catch(() => {});
     refresh();
@@ -108,7 +125,26 @@ function Shell() {
     };
   }, [session]);
 
-  if (session === undefined) {
+  // Public pages (web links), shown whether or not the visitor is signed in
+  if (publicView) {
+    const signUp = () => {
+      setPublicView(null);
+      if (typeof window !== "undefined") window.history.replaceState(null, "", window.location.pathname);
+      if (!session) setAuthMode("signup");
+    };
+    return (
+      <SafeAreaView style={s.fill} edges={["top", "left", "right"]}>
+        <StatusBar style={c.dark ? "light" : "dark"} />
+        {publicView.type === "share" ? (
+          <ShareScreen token={publicView.token} onSignUp={signUp} />
+        ) : (
+          <LegalScreen doc={publicView.doc} onChange={(doc) => setPublicView({ type: "legal", doc })} onBack={signUp} />
+        )}
+      </SafeAreaView>
+    );
+  }
+
+  if (session === undefined || (session && !settings)) {
     return (
       <View style={[s.fill, { justifyContent: "center", alignItems: "center" }]}>
         <Logo size={44} withName={false} />
@@ -122,11 +158,31 @@ function Shell() {
     return (
       <SafeAreaView style={s.fill} edges={["top", "left", "right"]}>
         <StatusBar style={c.dark ? "light" : "dark"} />
-        {authMode ? <LoginScreen initialMode={authMode} onBack={Platform.OS === "web" ? () => setAuthMode(null) : undefined} /> : <LandingScreen onStart={setAuthMode} />}
+        {authMode ? (
+          <LoginScreen initialMode={authMode} onBack={Platform.OS === "web" ? () => setAuthMode(null) : undefined} onOpenLegal={(doc) => setPublicView({ type: "legal", doc })} />
+        ) : (
+          <LandingScreen onStart={setAuthMode} onOpenLegal={(doc) => setPublicView({ type: "legal", doc })} />
+        )}
       </SafeAreaView>
     );
   }
 
+  // First run (or new Terms): accept terms, profile, watchlist
+  if (settings.needs_onboarding) {
+    return (
+      <SafeAreaView style={s.fill} edges={["top", "left", "right", "bottom"]}>
+        <StatusBar style={c.dark ? "light" : "dark"} />
+        {onboardingLegal ? (
+          <LegalScreen doc={onboardingLegal} onChange={setOnboardingLegal} onBack={() => setOnboardingLegal(null)} />
+        ) : (
+          <OnboardingScreen onOpenLegal={setOnboardingLegal} onDone={({ settings: st }) => setSettings({ ...settings, ...st, needs_onboarding: false })} />
+        )}
+      </SafeAreaView>
+    );
+  }
+
+  const sections = settings.is_admin ? [...SECTIONS, ADMIN] : SECTIONS;
+  const moreItems = sections.slice(4);
   const top = stack[stack.length - 1];
   let screen;
   if (top?.type === "briefing") screen = <BriefingScreen key={top.id} id={top.id} onBack={pop} onOpenStock={openStock} />;
@@ -143,14 +199,19 @@ function Shell() {
     );
   } else if (top?.type === "options") screen = <OptionsScreen key={`o-${top.ticker}`} ticker={top.ticker} onBack={pop} />;
   else if (top?.type === "backtest") screen = <BacktestScreen key={`b-${top.ticker}`} ticker={top.ticker} onBack={pop} />;
+  else if (top?.type === "automations") screen = <AutomationsScreen onBack={pop} />;
+  else if (top?.type === "legal") screen = <LegalScreen doc={top.doc} onBack={pop} onChange={(doc) => setStack((st) => [...st.slice(0, -1), { type: "legal", doc }])} />;
+  else if (tab === "today") screen = <TodayScreen onOpenStock={openStock} />;
   else if (tab === "markets") screen = <MarketsScreen onOpenStock={openStock} />;
   else if (tab === "screener") screen = <ScreenerScreen onOpenStock={openStock} />;
-  else if (tab === "portfolio") screen = <PortfolioScreen onOpenStock={openStock} />;
+  else if (tab === "portfolio") screen = <PortfolioScreen onOpenStock={openStock} onOpenTax={() => goTab("tax")} />;
   else if (tab === "alerts") screen = <AlertsScreen onOpenStock={openStock} onUnreadChange={setUnread} />;
-  else if (tab === "copilot") screen = <CopilotScreen onOpenStock={openStock} />;
+  else if (tab === "copilot") screen = <CopilotScreen onOpenStock={openStock} onOpenAutomations={() => push({ type: "automations" })} />;
   else if (tab === "journal") screen = <JournalScreen onOpenStock={openStock} />;
-  else if (tab === "account") screen = <AccountScreen email={session.user.email} />;
-  else if (tab === "more") screen = <MoreScreen items={SECTIONS.slice(4)} onSelect={goTab} unread={unread} />;
+  else if (tab === "tax") screen = <TaxScreen onOpenStock={openStock} />;
+  else if (tab === "admin" && settings.is_admin) screen = <AdminScreen />;
+  else if (tab === "account") screen = <AccountScreen email={session.user.email} onOpenLegal={openLegal} onOpenAdmin={() => goTab("admin")} />;
+  else if (tab === "more") screen = <MoreScreen items={moreItems} onSelect={goTab} unread={unread} />;
   else screen = <HomeScreen email={session.user.email} onOpen={openBriefing} onOpenStock={openStock} showSignOut={!wide} />;
 
   const content = (
@@ -165,24 +226,22 @@ function Shell() {
     return (
       <View style={[s.fill, { flexDirection: "row" }]}>
         <StatusBar style={c.dark ? "light" : "dark"} />
-        <View style={s.sidebar}>
+        <SafeAreaView edges={["top", "left", "bottom"]} style={[s.sidebar, width < 1024 && { width: 216 }]}>
           <View style={{ paddingHorizontal: 10, paddingVertical: 6 }}>
             <Logo size={34} />
           </View>
-          <View style={{ marginTop: 26, gap: 4 }}>
-            {SECTIONS.map((t) => {
-              const active = tab === t.key && !stack.length;
+          <ScrollView style={{ marginTop: 20 }} contentContainerStyle={{ gap: 2 }} showsVerticalScrollIndicator={false}>
+            {sections.map((t) => {
               const inSection = tab === t.key;
               return (
-                <Pressable key={t.key} onPress={() => goTab(t.key)} style={({ hovered }) => [s.navItem, (active || inSection) && s.navActive, hovered && !inSection && s.navHover]} accessibilityRole="tab" accessibilityState={{ selected: active }}>
+                <Pressable key={t.key} onPress={() => goTab(t.key)} style={({ hovered }) => [s.navItem, inSection && s.navActive, hovered && !inSection && s.navHover]} accessibilityRole="tab" accessibilityState={{ selected: inSection }}>
                   <Ionicons name={inSection ? t.icon : `${t.icon}-outline`} size={19} color={inSection ? c.primary : c.textSecondary} />
                   <Text style={[s.navText, inSection && { color: c.text }]}>{t.label}</Text>
                   {t.key === "alerts" && unread > 0 && <View style={s.navBadge}><Text style={s.badgeText}>{unread > 9 ? "9+" : unread}</Text></View>}
                 </Pressable>
               );
             })}
-          </View>
-          <View style={{ flex: 1 }} />
+          </ScrollView>
           <Pressable onPress={() => goTab("account")} style={({ hovered }) => [s.account, hovered && { backgroundColor: c.primarySoft }]}>
             <View style={s.avatar}><Text style={s.avatarText}>{(session.user.email ?? "?").slice(0, 1).toUpperCase()}</Text></View>
             <Text style={s.accountEmail} numberOfLines={1}>{session.user.email}</Text>
@@ -192,19 +251,22 @@ function Shell() {
               </Pressable>
             )}
           </Pressable>
-        </View>
-        {content}
+        </SafeAreaView>
+        <SafeAreaView edges={["top", "right", "bottom"]} style={{ flex: 1 }}>
+          {content}
+        </SafeAreaView>
       </View>
     );
   }
 
+  const moreKeys = moreItems.map((x) => x.key);
   return (
     <SafeAreaView style={s.fill} edges={["top", "left", "right"]}>
       <StatusBar style={c.dark ? "light" : "dark"} />
       {content}
       <SafeAreaView edges={["bottom"]} style={s.tabBar}>
         {PHONE_TABS.map((t) => {
-          const inSection = tab === t.key || (t.key === "more" && MORE_KEYS.includes(tab));
+          const inSection = tab === t.key || (t.key === "more" && moreKeys.includes(tab));
           return (
             <Pressable key={t.key} style={s.tab} onPress={() => goTab(t.key)} accessibilityRole="tab" accessibilityState={{ selected: inSection }} accessibilityLabel={t.label}>
               <View style={[s.tabIconWrap, inSection && { backgroundColor: c.primarySoft }]}>
@@ -226,12 +288,12 @@ const useStyles = makeStyles((c) => ({
   content: { flex: 1, width: "100%", alignSelf: "center" },
   contentWide: { maxWidth: 1040, paddingHorizontal: 12 },
   sidebar: { width: 248, backgroundColor: c.surface, borderRightWidth: 1, borderRightColor: c.border, padding: 16, paddingTop: 22 },
-  navItem: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 12, paddingVertical: 11, borderRadius: 12 },
+  navItem: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12 },
   navActive: { backgroundColor: c.primarySoft },
   navHover: { backgroundColor: c.surfaceAlt },
   navText: { color: c.textSecondary, fontWeight: "600", fontSize: 15, flex: 1 },
   navBadge: { backgroundColor: c.loss, borderRadius: 9, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 5 },
-  account: { flexDirection: "row", alignItems: "center", gap: 10, padding: 10, borderRadius: 14, backgroundColor: c.surfaceAlt },
+  account: { flexDirection: "row", alignItems: "center", gap: 10, padding: 10, borderRadius: 14, backgroundColor: c.surfaceAlt, marginTop: 12 },
   avatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: c.primarySoft, alignItems: "center", justifyContent: "center" },
   avatarText: { color: c.primary, fontWeight: "800" },
   accountEmail: { flex: 1, color: c.textSecondary, fontSize: 13 },

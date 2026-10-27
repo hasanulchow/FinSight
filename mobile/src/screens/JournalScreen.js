@@ -6,6 +6,9 @@ import { formatMoney, makeStyles, useTheme } from "../theme";
 import { Banner, Bullets, Button, Chip, Disclaimer, EmptyState, Input, Loading, PageHeader, SectionCard, Segmented, Stat, TickerAvatar } from "../components/ui";
 import LineChart from "../components/LineChart";
 import { ErrorNotice } from "../components/Upgrade";
+import RulesSheet from "../components/RulesSheet";
+import OptionPnlSheet from "../components/OptionPnlSheet";
+import { shareLink } from "../lib/share";
 
 const CSV_EXAMPLE = "Symbol,Side,Qty,Entry Price,Exit Price,Entry Date,Exit Date,Setup\nAAPL,long,10,180,192,2026-09-02,2026-09-10,breakout";
 const EMOTION_ICONS = { calm: "leaf-outline", confident: "thumbs-up-outline", fomo: "flash-outline", fearful: "alert-outline", revenge: "flame-outline", bored: "cafe-outline", greedy: "cash-outline", impulsive: "rocket-outline" };
@@ -26,6 +29,19 @@ export default function JournalScreen({ onOpenStock }) {
   const [coaching, setCoaching] = useState(false);
   const [coachError, setCoachError] = useState(null);
   const [breakdown, setBreakdown] = useState("by_emotion");
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const [explain, setExplain] = useState(null); // option trade to explain
+  const [toast, setToast] = useState(null);
+
+  async function share() {
+    try {
+      const { url } = await api.shareJournal();
+      const how = await shareLink({ title: "My trading stats", message: "My trading, measured by FinSight:", url });
+      if (how === "copied") setToast("Link copied to the clipboard");
+    } catch (e) {
+      setError(e);
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -74,12 +90,14 @@ export default function JournalScreen({ onOpenStock }) {
         subtitle={t?.closed ? `${t.closed} closed · ${t.open} open · realized ${data.stats.realized.year}: ${signed(data.stats.realized.ytd_pnl)}` : "Log trades with your setup and emotion. See what actually makes and loses you money, and get coached on it."}
         right={
           <View style={{ flexDirection: "row", gap: 8 }}>
+            <Button title="Rules" icon="list-outline" variant="ghost" size="sm" onPress={() => setRulesOpen(true)} />
             <Button title="Import" icon="cloud-upload-outline" variant="secondary" size="sm" onPress={() => setImportOpen(true)} />
             <Button title="Log trade" icon="add" size="sm" onPress={() => setSheet({ mode: "new" })} />
           </View>
         }
       />
       <ErrorNotice error={error} />
+      {toast && <Banner tone="success">{toast}</Banner>}
       {loading && !data && <Loading text="Loading your journal…" />}
 
       {data && !trades.length && (
@@ -142,6 +160,7 @@ export default function JournalScreen({ onOpenStock }) {
                 ))}
                 <Text style={s.subhead}>Rules to consider</Text>
                 <Bullets items={coach.rules_to_consider} color={sections.coach.color} />
+                <Button title="Turn these into checklist rules" icon="list" size="sm" variant="secondary" onPress={() => setRulesOpen(true)} style={{ alignSelf: "flex-start", marginTop: 4 }} />
                 <View style={s.focus}>
                   <Ionicons name="locate-outline" size={17} color={c.primary} />
                   <Text style={s.focusText}>{coach.next_focus}</Text>
@@ -150,7 +169,7 @@ export default function JournalScreen({ onOpenStock }) {
             )}
           </SectionCard>
 
-          <SectionCard title="Where the money comes from" section={sections.benchmark}>
+          <SectionCard title="Where the money comes from" section={sections.benchmark} right={<Button title="Share stats" icon="share-social-outline" size="sm" variant="ghost" onPress={share} />}>
             <Segmented
               options={[["by_emotion", "Emotion"], ["by_setup", "Setup"], ["by_ticker", "Ticker"], ["by_weekday", "Day"]]}
               value={breakdown}
@@ -190,7 +209,7 @@ export default function JournalScreen({ onOpenStock }) {
       {open.length > 0 && (
         <SectionCard title="Open trades" subtitle={`${open.length} position${open.length > 1 ? "s" : ""}`} section={sections.portfolio}>
           {open.map((x) => (
-            <TradeRow key={x.id} trade={x} onOpenStock={onOpenStock} onRemove={() => remove(x.id)} action={<Button title="Close" size="sm" variant="secondary" onPress={() => setSheet({ mode: "close", trade: x })} />} />
+            <TradeRow key={x.id} trade={x} onOpenStock={onOpenStock} onRemove={() => remove(x.id)} onExplain={setExplain} action={<Button title="Close" size="sm" variant="secondary" onPress={() => setSheet({ mode: "close", trade: x })} />} />
           ))}
         </SectionCard>
       )}
@@ -198,7 +217,7 @@ export default function JournalScreen({ onOpenStock }) {
       {closed.length > 0 && (
         <SectionCard title="Closed trades" subtitle="Most recent first" section={sec}>
           {closed.slice(0, 50).map((x) => (
-            <TradeRow key={x.id} trade={x} onOpenStock={onOpenStock} onRemove={() => remove(x.id)} />
+            <TradeRow key={x.id} trade={x} onOpenStock={onOpenStock} onRemove={() => remove(x.id)} onExplain={setExplain} />
           ))}
         </SectionCard>
       )}
@@ -206,12 +225,18 @@ export default function JournalScreen({ onOpenStock }) {
       <Disclaimer>Journal statistics are based on the trades you enter. Educational, not investment or tax advice.</Disclaimer>
 
       <TradeSheet sheet={sheet} emotions={data?.emotions ?? Object.keys(EMOTION_ICONS)} onClose={() => setSheet(null)} onSaved={() => { setSheet(null); load(); }} />
+      <RulesSheet visible={rulesOpen} onClose={() => setRulesOpen(false)} suggestions={coach?.rules_to_consider ?? []} onSaved={() => setToast("Rules saved. New trades are checked against them.")} />
+      <OptionPnlSheet
+        visible={!!explain}
+        onClose={() => setExplain(null)}
+        preset={explain && { ticker: explain.ticker, side: explain.side, contracts: explain.quantity, entry_date: explain.entry_date, entry_price: explain.entry_price, exit_date: explain.exit_date, exit_price: explain.exit_price }}
+      />
       <ImportSheet visible={importOpen} onClose={() => setImportOpen(false)} onDone={() => { setImportOpen(false); load(); }} />
     </ScrollView>
   );
 }
 
-function TradeRow({ trade: x, action, onOpenStock, onRemove }) {
+function TradeRow({ trade: x, action, onOpenStock, onRemove, onExplain }) {
   const { c } = useTheme();
   const s = useStyles();
   const r = x.result;
@@ -237,6 +262,11 @@ function TradeRow({ trade: x, action, onOpenStock, onRemove }) {
       ) : (
         action
       )}
+      {x.instrument === "option" && onExplain && (
+        <Pressable onPress={() => onExplain(x)} hitSlop={8} accessibilityLabel={`Explain ${x.ticker} option P/L`}>
+          <Ionicons name="help-circle-outline" size={18} color={c.primary} />
+        </Pressable>
+      )}
       <Pressable onPress={onRemove} hitSlop={8} accessibilityLabel={`Delete ${x.ticker} trade`}>
         <Ionicons name="trash-outline" size={16} color={c.muted} />
       </Pressable>
@@ -251,11 +281,16 @@ function TradeSheet({ sheet, emotions, onClose, onSaved }) {
   const [f, setF] = useState({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
-  const set = (k) => (v) => setF((x) => ({ ...x, [k]: v }));
+  const [checks, setChecks] = useState(null); // pre-trade checklist result, shown before saving a rule-breaking trade
+  const set = (k) => (v) => {
+    setF((x) => ({ ...x, [k]: v }));
+    setChecks(null);
+  };
 
   useEffect(() => {
     setF({ side: "long", instrument: "stock", entry_date: today(), exit_date: closing ? today() : "" });
     setError(null);
+    setChecks(null);
   }, [sheet, closing]);
 
   async function save() {
@@ -266,7 +301,7 @@ function TradeSheet({ sheet, emotions, onClose, onSaved }) {
       if (closing) {
         await api.updateTrade(sheet.trade.id, { exit_price: num(f.exit_price), exit_date: f.exit_date || today(), ...(f.emotion && { emotion: f.emotion }), ...(f.notes && { notes: f.notes }) });
       } else {
-        await api.addTrade({
+        const trade = {
           ticker: (f.ticker ?? "").trim().toUpperCase(),
           side: f.side,
           instrument: f.instrument,
@@ -280,7 +315,17 @@ function TradeSheet({ sheet, emotions, onClose, onSaved }) {
           setup: f.setup?.trim() || undefined,
           emotion: f.emotion,
           notes: f.notes?.trim() || undefined,
-        });
+        };
+        // Check the user's rules first; a broken rule shows the checklist and needs a second tap
+        if (!checks) {
+          const pre = await api.precheck(trade).catch(() => null);
+          if (pre && !pre.ok) {
+            setChecks(pre);
+            setBusy(false);
+            return;
+          }
+        }
+        await api.addTrade(trade);
       }
       onSaved();
     } catch (e) {
@@ -290,7 +335,7 @@ function TradeSheet({ sheet, emotions, onClose, onSaved }) {
   }
 
   return (
-    <Modal visible={!!sheet} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal supportedOrientations={["portrait", "landscape"]} visible={!!sheet} transparent animationType="fade" onRequestClose={onClose}>
       <View style={s.wrap}>
         <Pressable style={s.backdrop} onPress={onClose} accessibilityLabel="Close" />
         <View style={s.sheet}>
@@ -364,7 +409,21 @@ function TradeSheet({ sheet, emotions, onClose, onSaved }) {
             </Field>
           </ScrollView>
           <ErrorNotice error={error} />
-          <Button title={closing ? "Close trade" : "Save trade"} icon="checkmark" onPress={save} loading={busy} size="lg" style={{ marginTop: 14 }} />
+          {checks && (
+            <View style={s.checklist}>
+              <Text style={s.checkTitle}>This trade breaks {checks.failed} of your rule{checks.failed > 1 ? "s" : ""}</Text>
+              {checks.checks.map((ck) => (
+                <View key={ck.rule} style={s.checkRow}>
+                  <Ionicons name={ck.passed ? "checkmark-circle" : "close-circle"} size={16} color={ck.passed ? c.gain : c.loss} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.checkLabel}>{ck.label}</Text>
+                    <Text style={s.muted}>{ck.message}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+          <Button title={closing ? "Close trade" : checks ? "Log it anyway" : "Save trade"} icon={checks ? "warning" : "checkmark"} variant={checks ? "danger" : "primary"} onPress={save} loading={busy} size="lg" style={{ marginTop: 14 }} />
         </View>
       </View>
     </Modal>
@@ -402,7 +461,7 @@ function ImportSheet({ visible, onClose, onDone }) {
   }
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal supportedOrientations={["portrait", "landscape"]} visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={s.wrap}>
         <Pressable style={s.backdrop} onPress={onClose} accessibilityLabel="Close" />
         <View style={s.sheet}>
@@ -459,5 +518,9 @@ const useStyles = makeStyles((c) => ({
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
   label: { fontWeight: "700", color: c.text, marginBottom: 6, fontSize: 13, marginTop: 4 },
   code: { fontFamily: "monospace", fontSize: 11, color: c.textSecondary, backgroundColor: c.surfaceAlt, padding: 10, borderRadius: 10, marginTop: 8 },
+  checklist: { backgroundColor: c.warnSoft, borderRadius: 14, padding: 12, marginTop: 12, gap: 8 },
+  checkTitle: { color: c.text, fontWeight: "800", fontSize: 14 },
+  checkRow: { flexDirection: "row", gap: 8, alignItems: "flex-start" },
+  checkLabel: { color: c.text, fontWeight: "600", fontSize: 13 },
   textarea: { minHeight: 140, borderWidth: 1, borderColor: c.border, borderRadius: 14, padding: 12, marginTop: 12, color: c.text, backgroundColor: c.surfaceAlt, fontFamily: "monospace", fontSize: 12, textAlignVertical: "top", outlineStyle: "none" },
 }));

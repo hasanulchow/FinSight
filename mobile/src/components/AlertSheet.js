@@ -53,7 +53,7 @@ export default function AlertSheet({ ticker, price, visible, onClose, onCreated 
   }
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal supportedOrientations={["portrait", "landscape"]} visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={s.wrap}>
         <Pressable style={s.backdrop} onPress={onClose} accessibilityLabel="Close" />
         <View style={s.sheet}>

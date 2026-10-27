@@ -23,7 +23,7 @@ const POINTS = [
   { icon: "shield-checkmark", text: "Guardrails and quality scores on every answer" },
 ];
 
-export default function LoginScreen({ initialMode = "signin", onBack }) {
+export default function LoginScreen({ initialMode = "signin", onBack, onOpenLegal }) {
   const { c } = useTheme();
   const s = useStyles();
   const { width } = useWindowDimensions();
@@ -84,7 +84,12 @@ export default function LoginScreen({ initialMode = "signin", onBack }) {
       {message && <Banner tone={message.type}>{message.text}</Banner>}
 
       <Button title={mode === "signin" ? "Sign in" : "Create account"} iconRight="arrow-forward" onPress={submit} loading={busy} size="lg" style={{ marginTop: 22 }} />
-      <Text style={s.legal}>Educational research only, not investment advice.</Text>
+      <Text style={s.legal}>
+        {mode === "signup" ? "By creating an account you agree to the " : "Educational research only, not investment advice. "}
+        <Text style={{ fontWeight: "700" }} onPress={() => onOpenLegal?.("terms")}>Terms</Text>,{" "}
+        <Text style={{ fontWeight: "700" }} onPress={() => onOpenLegal?.("privacy")}>Privacy Policy</Text> and{" "}
+        <Text style={{ fontWeight: "700" }} onPress={() => onOpenLegal?.("disclaimer")}>Risk Disclaimer</Text>.
+      </Text>
     </View>
   );
 

@@ -1,6 +1,6 @@
 # FinSight: AI stock research for traders and investors
 
-Type a ticker and get an AI briefing in about a minute: live quote, chart and technical analysis, multi-year financials from SEC XBRL data, business and risk summaries from the latest 10-K, earnings and insider activity, and talking points. Ask the **Copilot**, an AI agent that uses 18 FinSight tools and proposes alerts, holdings and journal entries for you to confirm. Keep a **trade journal** with an AI coach, size positions to your risk, compare your portfolio with SPY, and scan any stock for red flags. Add smart alerts, a natural-language screener and a Portfolio X-ray. Free and Pro plans, billed with Stripe. Every briefing is checked by compliance guardrails and scored by an LLM judge plus automated checks.
+Type a ticker and get an AI briefing in about a minute: live quote, chart and technical analysis, multi-year financials from SEC XBRL data, business and risk summaries from the latest 10-K, earnings and insider activity, and talking points. Ask the **Copilot**, an AI agent that uses 18 FinSight tools and proposes alerts, holdings and journal entries for you to confirm. Keep a **trade journal** with an AI coach, size positions to your risk, compare your portfolio with SPY, and scan any stock for red flags. Add smart alerts, a natural-language screener and a Portfolio X-ray. Every weekday morning an agent briefs you on what changed for your stocks and re-checks your investment theses. Free and Pro plans (with a free trial), billed with Stripe. Works on iPhone, iPad, Android and the web. Every briefing is checked by compliance guardrails and scored by an LLM judge plus automated checks.
 
 **Stack:** React Native (Expo) · Node.js (Express) · Claude Sonnet 5.5 · Supabase (Postgres + Auth) · SEC EDGAR · Finnhub · Massive (prices) · Voyage AI (embeddings) · Render or Vercel
 
@@ -115,7 +115,7 @@ The first options or markets request for a symbol can take up to a minute on the
 
 **Scheduled jobs:** alerts, the screener refresh (`SCREENER_BATCH` tickers per run) and daily digests (after 21:00 UTC) run through `runJobs()`:
 - **Render or local:** set `JOBS_INTERVAL_MINUTES=10`.
-- **Vercel:** `vercel.json` defines a weekday cron calling `/jobs/run`, authorized by `CRON_SECRET`. The Hobby plan allows one run a day; Pro allows more frequent runs.
+- **Vercel:** `vercel.json` defines two weekday crons calling `/jobs/run` (12:00 UTC for thesis checks and morning briefs, 21:30 UTC for digests), authorized by `CRON_SECRET`. Automations run on whichever job fires next after their time, so on Vercel Hobby they are effectively twice a day; Render with `JOBS_INTERVAL_MINUTES=10` runs them on time.
 
 ### Agentic SaaS layer (v1.4)
 
@@ -135,13 +135,32 @@ The first options or markets request for a symbol can take up to a minute on the
 
 Without Stripe keys, everyone stays on Free and upgrades are hidden. In local mode, `DEV_PLAN=free|pro` picks the plan (default `pro`).
 
+### Proactive agent, discipline tools and launch basics (v1.5)
+
+| Feature | What it does | Where |
+|---|---|---|
+| **Morning brief** | Every weekday before the open (11:00 to 15:00 UTC), an agent reviews every stock you own or watch: price moves, trend, earnings within 7 days, new SEC filings, insider trades in the last 3 days, red flags and thesis status. It writes what changed and why it matters, then sends a push notification. The **Today** tab shows the brief and can refresh it on demand. | `lib/brief.js` |
+| **Thesis tracker** | Each watchlist stock can carry a one-line thesis. An agent checks it daily against the evidence: price action, fundamentals, earnings, insiders, filings and red flags. It rates the thesis intact, watch, weakening or broken, and notifies you when it gets worse. | `lib/watchlist.js` |
+| **Automations** | Scheduled Copilot prompts that run daily, on weekdays or weekly at a chosen time; for example, "Every Friday, check my watchlist for oversold names." Each run continues its own conversation and sends you the answer. | `lib/tasks.js` |
+| **Pre-trade checklist** | Your own rules, for example: always set a stop, wait N days after a loss, max risk %, max position %, no trades before earnings, blocked emotions, and minimum reward:risk. New journal trades are checked against them, and a broken rule shows the checklist with a "Log it anyway" button. The coach's suggested rules can be turned into checklist rules. | `lib/rules.js` |
+| **Option P/L explainer** | Answers "why did my call lose money when the stock went up?" It re-prices the option with Black-Scholes one factor at a time to split P/L into stock move, time decay and the change in implied volatility (IV crush). The parts add up exactly to the total. | `lib/optionPnl.js` |
+| **Tax center** | Realized P/L this year (short vs long term, by month), possible wash sales, and tax-loss harvesting candidates among holdings, with the dates you can rebuy without a wash sale. | `lib/tax.js` |
+| **Broker sync** | Read-only SnapTrade connection (Robinhood, Schwab, Fidelity, IBKR, Webull and others). It imports positions into Holdings, and turns a year of buy/sell fills into journal round trips matched first in, first out. Re-syncing doesn't create duplicates. The SnapTrade user secret is encrypted at rest (AES-256-GCM). | `lib/broker.js` |
+| **Onboarding + legal** | First run asks you to accept the Terms, Privacy Policy and Risk Disclaimer (stored with the version), then your experience level, goals and a starter watchlist. The legal pages are in the app and at `/?legal=terms`. | `OnboardingScreen`, `mobile/src/lib/legal.js` |
+| **Referrals + sharing** | Invite links (`/?ref=CODE`) give both people 14 days of Pro. Share links (`/?share=TOKEN`) publish a snapshot of a briefing or your journal stats, with no dollar amounts or identity. | `lib/account.js`, `lib/shares.js` |
+| **Free trial, account deletion** | The first Pro checkout includes a `TRIAL_DAYS` trial (default 7). Deleting your account cancels Stripe, disconnects the broker, deletes all rows and removes the login. | `lib/billing.js`, `lib/account.js` |
+| **Analytics + admin** | Optional server-side PostHog events (`POSTHOG_KEY`). Every Claude call is logged to `ai_usage` with its cost (via AsyncLocalStorage, so no ids are passed around). Admins (`ADMIN_EMAILS`) get a business dashboard: users, active users, MRR, conversion, AI cost per agent and per user, gross margin, and signups. | `lib/analytics.js`, `lib/aiUsage.js`, `lib/admin.js` |
+| **iPad and tablets** | At 768pt and wider, any platform (iPad, Android tablets, desktop web) uses the sidebar layout. The app rotates (`orientation: default`), supports iPad Split View (`requireFullScreen: false`), and every modal allows landscape. Sheets become centered dialogs on tablets. | `App.js`, `app.json`, `components/Sheet.js` |
+
+The legal texts are starting templates written for FinSight's actual features. Have a lawyer review them, and fill in your company details, before charging customers.
+
 ## Setup
 
 **Requirements:** Node.js 22 or later (Expo SDK 58 and supabase-js need it), and the Expo Go app on your phone.
 
 ### 1. Supabase
 1. Create a project at supabase.com.
-2. In the SQL editor, run `supabase/schema.sql`, then `supabase/002_memory_guardrails_embeddings.sql` (pgvector, memory, chat, guardrail log), then `supabase/003_trading_features.sql` (price cache, alerts, notifications, push tokens, screener, earnings cache, holdings), then `supabase/004_options_markets.sql` (shared cache for options and market data), then `supabase/005_copilot_journal_billing.sql` (journal, Copilot, plans, usage and subscriptions).
+2. In the SQL editor, run `supabase/schema.sql`, then `supabase/002_memory_guardrails_embeddings.sql` (pgvector, memory, chat, guardrail log), then `supabase/003_trading_features.sql` (price cache, alerts, notifications, push tokens, screener, earnings cache, holdings), then `supabase/004_options_markets.sql` (shared cache for options and market data), then `supabase/005_copilot_journal_billing.sql` (journal, Copilot, plans, usage and subscriptions), then `supabase/006_proactive_growth.sql` (settings and onboarding, watchlist and theses, morning briefs, automations, broker connections, AI cost log, share links).
 3. Authentication → Providers → Email: enabled. For a quick demo, turn off "Confirm email".
 4. Authentication → URL Configuration: set Site URL to your deployed URL (e.g. `https://finsight.onrender.com`) and add it plus `http://localhost:3001` under Redirect URLs, so confirmation emails link back to the app.
 5. Project Settings → API: copy the URL, the anon key and the service-role key.
@@ -220,6 +239,22 @@ All routes need `Authorization: Bearer <Supabase access token>`.
 | GET | `/stocks/:ticker/redflags` | Red-flag scan |
 | GET | `/plans`, `/account` | Plans; the user's plan, today's usage and caps |
 | POST | `/billing/checkout`, `/billing/portal`, `/billing/webhook` | Stripe Checkout, customer portal, webhook (signature-verified) |
+| GET / PATCH | `/settings` | Settings, `needs_onboarding`, `is_admin`; update brief and profile preferences |
+| POST | `/onboarding` | `{ accept_terms: true, experience, goals, watchlist, ref }` |
+| GET | `/referrals` | Invite code, link, signups |
+| DELETE | `/account` | `{ confirm: "DELETE" }`: cancels billing and deletes everything |
+| GET / POST / PATCH / DELETE | `/watchlist`, `/watchlist/:id` | Watchlist and theses; `POST /watchlist/:id/check` re-checks a thesis |
+| GET / POST | `/brief`, `/brief/generate` | Latest morning brief; build today's now |
+| GET / POST / PATCH / DELETE | `/automations`, `/automations/:id` | Scheduled Copilot tasks; `POST /automations/:id/run` runs one now |
+| GET / PUT | `/rules` | Rule definitions and the user's rules |
+| POST | `/journal/precheck` | Checks a planned trade against the rules |
+| POST | `/options/pnl-explain` | Option P/L split into stock move, time decay and IV |
+| GET | `/tax/summary?year=` | Realized gains, wash sales, harvesting candidates |
+| GET / POST / DELETE | `/broker`, `/broker/connect`, `/broker/sync` | SnapTrade status, connection portal URL, import, disconnect |
+| POST | `/briefings/:id/share`, `/journal/share` | Create a public share link |
+| GET | `/share/:token` | Public share snapshot (no auth) |
+| POST | `/events` | Allow-listed client analytics events |
+| GET | `/admin/metrics` | Business dashboard (admins only) |
 
 ## Known limitations
 

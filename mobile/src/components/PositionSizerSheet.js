@@ -50,7 +50,7 @@ export default function PositionSizerSheet({ ticker, price, visible, onClose }) 
   const stopChoices = sug ? Object.entries({ "2× ATR": sug.atr_2x, [side === "long" ? "Below support" : "Above resistance"]: side === "long" ? sug.below_support : sug.above_resistance }).filter(([, v]) => v) : [];
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal supportedOrientations={["portrait", "landscape"]} visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={s.wrap}>
         <Pressable style={s.backdrop} onPress={onClose} accessibilityLabel="Close" />
         <View style={s.sheet}>

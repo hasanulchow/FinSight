@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { api } from "../lib/api";
 import { makeStyles, useTheme } from "../theme";
-import { Button, Disclaimer } from "../components/ui";
+import { Button, Disclaimer, IconButton } from "../components/ui";
 import Markdown from "../components/Markdown";
 import { ErrorNotice } from "../components/Upgrade";
 
@@ -40,7 +40,7 @@ const TOOL_LABELS = {
 };
 
 /** AI Copilot: an agent that calls FinSight's tools to answer, and proposes changes the user confirms. */
-export default function CopilotScreen({ onOpenStock }) {
+export default function CopilotScreen({ onOpenStock, onOpenAutomations }) {
   const { c, sections } = useTheme();
   const s = useStyles();
   const sec = sections.copilot;
@@ -51,6 +51,8 @@ export default function CopilotScreen({ onOpenStock }) {
   const [error, setError] = useState(null);
   const [history, setHistory] = useState(null); // null = hidden
   const scroller = useRef(null);
+  // Phones: icon-only header buttons so the title fits
+  const compact = useWindowDimensions().width < 560;
 
   useEffect(() => {
     const t = setTimeout(() => scroller.current?.scrollToEnd({ animated: true }), 60);
@@ -123,8 +125,19 @@ export default function CopilotScreen({ onOpenStock }) {
           <Text style={s.topTitle}>Copilot</Text>
           <Text style={s.topSub}>Research agent with 18 tools</Text>
         </View>
-        <Button title="History" icon="time-outline" variant="ghost" size="sm" onPress={history ? () => setHistory(null) : openHistory} />
-        {!empty && <Button title="New" icon="add" variant="secondary" size="sm" onPress={newChat} />}
+        {compact ? (
+          <>
+            {onOpenAutomations && <IconButton icon="timer-outline" label="Automations" tone={c.primary} onPress={onOpenAutomations} />}
+            <IconButton icon="time-outline" label="History" tone={c.primary} onPress={history ? () => setHistory(null) : openHistory} />
+            {!empty && <IconButton icon="add-circle-outline" label="New chat" tone={c.primary} onPress={newChat} />}
+          </>
+        ) : (
+          <>
+            {onOpenAutomations && <Button title="Automations" icon="timer-outline" variant="ghost" size="sm" onPress={onOpenAutomations} />}
+            <Button title="History" icon="time-outline" variant="ghost" size="sm" onPress={history ? () => setHistory(null) : openHistory} />
+            {!empty && <Button title="New" icon="add" variant="secondary" size="sm" onPress={newChat} />}
+          </>
+        )}
       </View>
 
       {history && (

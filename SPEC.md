@@ -658,3 +658,55 @@ Schema: `supabase/004_options_markets.sql` adds `kv_cache`, a shared cache for o
 - **Stock page:** adds the Red-flag radar card and a "Size it" position sizer sheet.
 - **Portfolio:** adds the vs S&P 500 card.
 - **Data model:** migration `005` adds `trades`, `subscriptions`, `usage_events`, `copilot_conversations`, `copilot_messages` and `copilot_actions`. RLS limits select to the row's owner.
+
+## 20. v1.5 Proactive Agent, Discipline Tools and Launch Basics
+
+**Goal:** give users a reason to open the app every day, turn the coach's advice into habits, remove manual data entry, and make the product ready to charge (legal, trial, analytics, unit economics). The app also works on iPad.
+
+### 20.1 Proactive agent
+- **Morning brief (`lib/brief.js`, agent `morning_brief`, effort low).**
+  - Inputs: up to 15 tickers from holdings plus the watchlist. For each ticker it gathers the quote, technical snapshot, earnings within 7 days, filings and insider trades from the last 3 days, red flags, and thesis status.
+  - Output: `headline`, `market_note`, `items[]` (ticker, importance, what_changed, why_it_matters), `calendar[]` and `quiet[]`.
+  - Stored in `daily_briefs` (one per user per day). The job runs between 11:00 and 15:00 UTC on weekdays and sends a push notification. Users can opt out with `brief_enabled`.
+- **Thesis tracker (`lib/watchlist.js`, agent `thesis_tracker`).**
+  - Evidence: quote, TTM fundamentals, technicals, earnings, insiders, red flags and filings from the last 45 days.
+  - Verdict: intact, watch, weakening or broken, with supporting facts, facts against, and what to watch.
+  - Runs daily (10:00 to 15:00 UTC, skipped if checked in the last 20 hours). The user is notified only when the status gets worse.
+- **Automations (`lib/tasks.js`).**
+  - A schedule is `frequency` (daily, weekdays or weekly), `hour_utc` and `weekday`. The app converts the user's local time to UTC.
+  - Each run uses one Copilot message from the quota and continues the task's conversation.
+  - A failed run moves on to the next slot instead of retrying.
+  - Caps: Free 1, Pro 10.
+
+### 20.2 Discipline tools
+- **Rules (`lib/rules.js`):** `require_stop`, `cooldown_after_loss_days`, `max_trades_per_day`, `max_risk_pct` + `account_size`, `max_position_pct`, `no_earnings_within_days`, `blocked_emotions`, `min_reward_risk`. Stored in `user_settings.rules`. `POST /journal/precheck` returns a per-rule checklist; rules warn but never block.
+- **Option P/L explainer (`lib/optionPnl.js`).**
+  - Implied volatility is solved at entry and at exit from the option prices. Missing stock prices come from daily bars or the live quote.
+  - P/L is attributed in sequence: stock move with the entry IV and time to expiry, then time decay, then the IV change. "Other" is the gap between model and market prices.
+  - The plain-English explanation is built from the numbers (no AI call).
+- **Tax center (`lib/tax.js`).**
+  - Realized P/L by calendar year: short term means held 365 days or less. Also shows P/L by month and wash sales with an estimated disallowed amount.
+  - Harvesting candidates are holdings below their cost basis. Each shows a rebuy-safe date (today + 30 days) and a warning if the stock was bought in the last 30 days.
+
+### 20.3 Broker sync (`lib/broker.js`)
+- **SnapTrade.** Uses `snaptrade-typescript-sdk` with a commercial API key and read-only connections. Each user is registered once; `user_secret_enc` is AES-256-GCM with a key from `ENCRYPTION_KEY`.
+- **Positions.** Imported into `holdings` (merged; the cost basis is a weighted average across accounts).
+- **Fills.** A year of stock BUY and SELL fills is matched first in, first out into journal round trips, plus open lots. `trades.external_id` (unique per user) prevents duplicates.
+
+### 20.4 Launch basics
+- **Settings (`user_settings`).** Created on first use. Stores terms acceptance with `terms_version`, experience, goals, referral code, `pro_until`, rules and brief preference. `needs_onboarding` is true until the current terms version is accepted.
+- **Referrals.** `/?ref=CODE` is remembered on the device until onboarding. Both users get `REFERRAL_PRO_DAYS` (14); referrers are rewarded for up to `MAX_REFERRAL_REWARDS` (10) signups. Self-referral is blocked. `getPlan` treats `pro_until` in the future as Pro.
+- **Trial.** The first subscription's checkout gets `trial_period_days = TRIAL_DAYS`. The plan source shown to the user is subscription, trial, referral or dev.
+- **Account deletion.** Cancels the Stripe subscription, deletes the SnapTrade user, deletes rows from every user table, then calls `auth.admin.deleteUser`.
+- **Sharing (`shares`).** Frozen snapshots with no PII. Journal cards contain only ratios and a normalized curve. They are public at `GET /share/:token` and `/?share=TOKEN`, with a sign-up call to action that carries the sharer's referral code.
+- **Analytics.** Server-side PostHog capture (no client SDK). `POST /events` accepts only allow-listed event names.
+- **AI cost.** An `AsyncLocalStorage` context is set in `requireUser` and in jobs. `runAgent` and the Copilot loop record tokens and USD to `ai_usage`, using list prices (Sonnet 5.5: $2 input / $10 output per million tokens), which can be overridden with env vars.
+- **Admin (`ADMIN_EMAILS`).** Shows users, active users (7 and 30 days), MRR, conversion, trialing, referral Pro, cancelling, and AI cost in total, per active user, per agent and per top user, plus gross margin and signups by day.
+
+### 20.5 App and iPad
+- **Navigation.**
+  - Phone tabs: Today, Copilot, Research, Portfolio and More. More holds Markets, Journal, Screener, Alerts, Tax center, Account, and Admin for admins.
+  - The sidebar lists everything and is used on any platform when the width is 768pt or more (iPad portrait and landscape, Android tablets, desktop web).
+- **iPad.** `app.json` sets `orientation: default` and `ios.requireFullScreen: false` (Split View and Slide Over). Every `Modal` sets `supportedOrientations` to portrait and landscape. `Sheet` is a centered dialog at 768pt and wider.
+- **Shared UI fixes.** `PageHeader` actions wrap under the title on narrow screens, and inputs can shrink below the web's default input width.
+- **Data model.** Migration `006` adds `user_settings`, `watchlist`, `daily_briefs`, `copilot_tasks`, `broker_connections`, `ai_usage`, `shares` and `trades.external_id`. `broker_connections` and `ai_usage` have no client read policies.

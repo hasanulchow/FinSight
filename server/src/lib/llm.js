@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { config } from "../config.js";
 import { supabase } from "./supabase.js";
 import { localStore } from "./localStore.js";
+import { recordAiUsage } from "./aiUsage.js";
 
 const client = new Anthropic(); // reads ANTHROPIC_API_KEY
 
@@ -30,6 +31,7 @@ export async function runAgent({ agent, system, prompt, schema, briefingId, mode
       throw new Error(`${agent}: output hit max_tokens`);
     }
 
+    await recordAiUsage(response, agent);
     const text = response.content.filter((b) => b.type === "text").map((b) => b.text).join("");
     const output = JSON.parse(text);
 

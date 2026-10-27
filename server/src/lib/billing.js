@@ -1,6 +1,8 @@
 import Stripe from "stripe";
 import { config } from "../config.js";
 import { supabase } from "./supabase.js";
+import { TRIAL_DAYS } from "./plans.js";
+import { track } from "./analytics.js";
 
 // Stripe subscriptions: Checkout for upgrades, the Customer Portal for managing/cancelling,
 // and a webhook that keeps the `subscriptions` table in sync. Plans are enforced in lib/plans.js.
@@ -29,11 +31,21 @@ export async function createCheckout(user, { returnUrl } = {}) {
     cancel_url: `${base}?billing=cancelled`,
     client_reference_id: user.id,
     ...(existing?.stripe_customer_id ? { customer: existing.stripe_customer_id } : { customer_email: user.email }),
-    subscription_data: { metadata: { user_id: user.id } },
+    // First subscription only: a free trial (card collected up front, cancel anytime before it ends)
+    subscription_data: { metadata: { user_id: user.id }, ...(!existing?.stripe_subscription_id && TRIAL_DAYS > 0 && { trial_period_days: TRIAL_DAYS }) },
     metadata: { user_id: user.id },
     allow_promotion_codes: true,
   });
+  track(user.id, "checkout_started", { trial: !existing?.stripe_subscription_id && TRIAL_DAYS > 0 });
   return { url: session.url };
+}
+
+/** Cancels the subscription immediately (account deletion). No-op without billing or a subscription. */
+export async function cancelSubscriptionNow(userId) {
+  if (!config.stripeKey) return;
+  const row = await getSubscriptionRow(userId);
+  if (!row?.stripe_subscription_id || ["canceled", "incomplete_expired"].includes(row.status)) return;
+  await api().subscriptions.cancel(row.stripe_subscription_id);
 }
 
 /** Stripe Customer Portal URL (change card, cancel, invoices). */

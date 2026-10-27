@@ -1,6 +1,7 @@
 import { config } from "../config.js";
 import { supabase } from "./supabase.js";
 import { localStore } from "./localStore.js";
+import { referralProUntil } from "./account.js";
 
 // SaaS plans and usage limits. Every AI-backed feature calls checkQuota() before running and
 // recordUsage() after, so costs stay bounded per user. Limits are per UTC day unless noted.
@@ -17,7 +18,7 @@ export const PLANS = {
       ai_tool: num("FREE_AI_TOOLS_PER_DAY", 10), // screener, chart/options explanations, X-ray, journal coach
       question: num("FREE_QUESTIONS_PER_DAY", 10), // Ask the 10-K
     },
-    caps: { alerts: 5, holdings: 25, trades: 200 },
+    caps: { alerts: 5, holdings: 25, trades: 200, watchlist: 10, automations: 1 },
   },
   pro: {
     name: "Pro",
@@ -28,18 +29,28 @@ export const PLANS = {
       ai_tool: num("PRO_AI_TOOLS_PER_DAY", 200),
       question: num("PRO_QUESTIONS_PER_DAY", 200),
     },
-    caps: { alerts: 100, holdings: 500, trades: 20000 },
+    caps: { alerts: 100, holdings: 500, trades: 20000, watchlist: 100, automations: 10 },
   },
 };
 
 const ACTIVE = new Set(["active", "trialing"]);
+export const TRIAL_DAYS = Number(process.env.TRIAL_DAYS ?? 7);
 
 /** The user's plan key. Local mode uses DEV_PLAN (default pro) so everything can be tested. */
 export async function getPlan(userId) {
-  if (config.localMode) return process.env.DEV_PLAN === "free" ? "free" : "pro";
-  const { data } = await supabase().from("subscriptions").select("plan, status, current_period_end").eq("user_id", userId).maybeSingle();
-  if (data && data.plan === "pro" && ACTIVE.has(data.status) && (!data.current_period_end || Date.parse(data.current_period_end) > Date.now() - 86_400_000)) return "pro";
-  return "free";
+  return (await planSource(userId)).plan;
+}
+
+/** Plan plus where Pro comes from: a Stripe subscription, referral days, or DEV_PLAN in local mode. */
+async function planSource(userId) {
+  if (config.localMode && process.env.DEV_PLAN !== "free") return { plan: "pro", source: "dev" };
+  if (!config.localMode) {
+    const { data } = await supabase().from("subscriptions").select("plan, status, current_period_end").eq("user_id", userId).maybeSingle();
+    if (data && data.plan === "pro" && ACTIVE.has(data.status) && (!data.current_period_end || Date.parse(data.current_period_end) > Date.now() - 86_400_000)) return { plan: "pro", source: data.status === "trialing" ? "trial" : "subscription" };
+  }
+  const until = await referralProUntil(userId).catch(() => null);
+  if (until) return { plan: "pro", source: "referral", until };
+  return { plan: "free", source: null };
 }
 
 const startOfDay = () => `${new Date().toISOString().slice(0, 10)}T00:00:00Z`;
@@ -78,7 +89,7 @@ export async function checkCap(userId, cap, currentCount) {
 
 /** Plan + today's usage, for the account screen. */
 export async function planSummary(userId) {
-  const plan = await getPlan(userId);
+  const { plan, source, until } = await planSource(userId);
   const usage = {};
   for (const feature of Object.keys(PLANS[plan].limits)) usage[feature] = { used: await usedToday(userId, feature), limit: PLANS[plan].limits[feature] };
   let subscription = null;
@@ -86,5 +97,5 @@ export async function planSummary(userId) {
     const { data } = await supabase().from("subscriptions").select("plan, status, current_period_end, cancel_at_period_end").eq("user_id", userId).maybeSingle();
     subscription = data;
   }
-  return { plan, plan_name: PLANS[plan].name, usage, caps: PLANS[plan].caps, subscription, billing_enabled: Boolean(config.stripeKey && config.stripePricePro) };
+  return { plan, plan_name: PLANS[plan].name, pro_source: source, pro_until: until ?? null, usage, caps: PLANS[plan].caps, subscription, billing_enabled: Boolean(config.stripeKey && config.stripePricePro), trial_days: subscription ? 0 : TRIAL_DAYS };
 }

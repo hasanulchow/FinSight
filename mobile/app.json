@@ -2,13 +2,14 @@
   "expo": {
     "name": "FinSight",
     "slug": "finsight",
-    "version": "1.1.0",
-    "orientation": "portrait",
+    "version": "1.5.0",
+    "orientation": "default",
     "userInterfaceStyle": "automatic",
     "scheme": "finsight",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.finsight.app"
+      "bundleIdentifier": "com.finsight.app",
+      "requireFullScreen": false
     },
     "android": {
       "package": "com.finsight.app",

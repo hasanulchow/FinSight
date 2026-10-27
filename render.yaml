@@ -47,7 +47,19 @@ services:
         sync: false
       - key: STRIPE_PRICE_PRO # Stripe price id of the Pro subscription
         sync: false
-      - key: APP_URL # public URL, used for Stripe redirects
+      - key: APP_URL # public URL, used for Stripe redirects, share and referral links
+        sync: false
+      - key: TRIAL_DAYS # free trial on the first Pro subscription
+        value: "7"
+      - key: SNAPTRADE_CLIENT_ID # broker sync (optional)
+        sync: false
+      - key: SNAPTRADE_CONSUMER_KEY
+        sync: false
+      - key: ENCRYPTION_KEY # encrypts broker secrets at rest
+        generateValue: true
+      - key: POSTHOG_KEY # product analytics (optional)
+        sync: false
+      - key: ADMIN_EMAILS # who can open the founder dashboard
         sync: false
       # Baked into the web bundle at build time: Supabase URL + anon/publishable key only
       - key: EXPO_PUBLIC_SUPABASE_URL
