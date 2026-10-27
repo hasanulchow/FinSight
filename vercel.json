@@ -24,7 +24,10 @@
     { "source": "/screener/:path*", "destination": "/api" },
     { "source": "/portfolio", "destination": "/api" },
     { "source": "/portfolio/:path*", "destination": "/api" },
-    { "source": "/jobs/:path*", "destination": "/api" }
+    { "source": "/jobs/:path*", "destination": "/api" },
+    { "source": "/options/:path*", "destination": "/api" },
+    { "source": "/backtest/:path*", "destination": "/api" },
+    { "source": "/market/:path*", "destination": "/api" }
   ],
   "crons": [
     { "path": "/jobs/run", "schedule": "30 21 * * 1-5" }

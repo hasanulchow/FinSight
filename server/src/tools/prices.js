@@ -19,16 +19,24 @@ async function throttle() {
   if (wait) await new Promise((r) => setTimeout(r, wait));
 }
 
+/**
+ * GET a Massive endpoint (path with query string), rate-limited and shared by stocks, options and market data.
+ * Errors carry .status: 403 = not included in the plan, 429 = rate limit.
+ */
+export async function massiveGet(path) {
+  if (!pricesEnabled()) throw Object.assign(new Error("Market data needs MASSIVE_API_KEY (or POLYGON_API_KEY) on the server."), { status: 503 });
+  await throttle();
+  const res = await fetch(`${config.pricesBaseUrl}${path}${path.includes("?") ? "&" : "?"}apiKey=${config.pricesKey}`);
+  if (res.status === 429) throw Object.assign(new Error("Market data rate limit reached. Try again in a minute."), { status: 429 });
+  if (res.status === 403) throw Object.assign(new Error("This data isn't included in the current Massive plan."), { status: 403 });
+  if (!res.ok) throw Object.assign(new Error(`Market data request failed (${res.status})`), { status: 502 });
+  return res.json();
+}
+
 async function fetchBars(ticker) {
-  if (!pricesEnabled()) throw Object.assign(new Error("Price history needs MASSIVE_API_KEY (or POLYGON_API_KEY) on the server."), { status: 503 });
   const to = new Date().toISOString().slice(0, 10);
   const from = new Date(Date.now() - HISTORY_DAYS * 86_400_000).toISOString().slice(0, 10);
-  const url = `${config.pricesBaseUrl}/v2/aggs/ticker/${encodeURIComponent(ticker)}/range/1/day/${from}/${to}?adjusted=true&sort=asc&limit=50000&apiKey=${config.pricesKey}`;
-  await throttle();
-  const res = await fetch(url);
-  if (res.status === 429) throw Object.assign(new Error("Price data rate limit reached. Try again in a minute."), { status: 429 });
-  if (!res.ok) throw new Error(`Price history request failed (${res.status})`);
-  const body = await res.json();
+  const body = await massiveGet(`/v2/aggs/ticker/${encodeURIComponent(ticker)}/range/1/day/${from}/${to}?adjusted=true&sort=asc&limit=50000`);
   return (body.results ?? []).map(({ t, o, h, l, c, v }) => ({ t, o, h, l, c, v }));
 }
 

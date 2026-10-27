@@ -84,7 +84,7 @@ Every action is written to `guardrail_events` as an audit trail.
 
 ## Trading features (v1.2)
 
-The app has four tabs (**Research, Screener, Portfolio, Alerts**) and runs on iOS, Android and the web.
+The app has five tabs (**Research, Markets, Screener, Portfolio, Alerts**) and runs on iOS, Android and the web.
 
 | Feature | What it does | Where |
 |---|---|---|
@@ -95,6 +95,21 @@ The app has four tabs (**Research, Screener, Portfolio, Alerts**) and runs on iO
 | **Portfolio X-ray** | CSV import (broker exports or `AAPL,10,150` lines) or manual entry: value, day change, P/L, sector weights, concentration (effective number of holdings), chart health per holding, upcoming earnings, AI analysis, and a daily digest notification. | `lib/portfolio.js` |
 
 Plus **Ask the 10-K** (cited Q&A with conversation memory) and a "Since your last look" section in repeat briefings.
+
+### Options, backtesting and markets (v1.3)
+
+| Feature | What it does | Where |
+|---|---|---|
+| **Options center** | Implied vs historical volatility (20/60-day), IV regime, earnings-before-expiry warning, expected move with a range bar, and the probability of finishing above key support/resistance levels. Includes an option chain (price, delta, probability ITM, IV), plus put/call ratios and max pain when open-interest data is available. | `lib/options.js`, `lib/optionsMath.js` |
+| **Strategy builder** | 10 templates: long call or put, covered call, cash-secured put, protective put, bull call and bear put spreads, straddle, strangle, iron condor. Each shows a payoff chart (at expiration and today), breakevens, max profit and loss, probability of profit, net debit or credit, and position greeks. The **Options Analyst** agent explains the volatility picture and the strategy's risks. | `optionsMath.analyzeStrategy`, `agents/optionsAnalyst.js` |
+| **Backtester** | MA crossover, RSI mean reversion, MACD crossover, Donchian breakout and 200-day trend filter, with editable parameters. Signals fill at the next open with 5 bps costs. Shows an equity curve and drawdowns vs buy-and-hold, plus return, CAGR, max drawdown, Sharpe, win rate, exposure and the trade list. | `lib/backtest.js` |
+| **Markets tab** | Index ETFs (SPY, QQQ, DIA, IWM), 11 sector ETFs, breadth (advancers vs decliners across ~5,000 stocks), a large-cap heatmap, top gainers, losers and most active, and a multi-ticker performance comparison chart. | `lib/market.js` |
+
+**Options data:**
+- **Free plan:** Massive provides contracts and per-contract daily prices. The app prices the at-the-money call and put, solves for implied volatility, and models every strike with Black-Scholes at that volatility. The model reproduced AAPL's market ATM prices to within $0.03.
+- **Paid options plan:** the app automatically uses the live chain snapshot instead (bid/ask, per-strike IV, greeks, open interest).
+
+The first options or markets request for a symbol can take up to a minute on the free tier (5 calls/minute). Results are cached for everyone in `kv_cache` (options 6 hours, market snapshot 3 hours).
 
 **Market data:** price history comes from [Massive](https://massive.com) (formerly Polygon.io). Bars are cached per ticker in `price_bars` because the free tier allows about 5 calls a minute; a paid plan makes the screener universe and alerts faster. Without `MASSIVE_API_KEY`, briefings still work, just without technicals. Institutional (13F) holdings need a paid data source and aren't included.
 
@@ -108,7 +123,7 @@ Plus **Ask the 10-K** (cited Q&A with conversation memory) and a "Since your las
 
 ### 1. Supabase
 1. Create a project at supabase.com.
-2. In the SQL editor, run `supabase/schema.sql`, then `supabase/002_memory_guardrails_embeddings.sql` (pgvector, memory, chat, guardrail log), then `supabase/003_trading_features.sql` (price cache, alerts, notifications, push tokens, screener, earnings cache, holdings).
+2. In the SQL editor, run `supabase/schema.sql`, then `supabase/002_memory_guardrails_embeddings.sql` (pgvector, memory, chat, guardrail log), then `supabase/003_trading_features.sql` (price cache, alerts, notifications, push tokens, screener, earnings cache, holdings), then `supabase/004_options_markets.sql` (shared cache for options and market data).
 3. Authentication → Providers → Email: enabled. For a quick demo, turn off "Confirm email".
 4. Authentication → URL Configuration: set Site URL to your deployed URL (e.g. `https://finsight.onrender.com`) and add it plus `http://localhost:3001` under Redirect URLs, so confirmation emails link back to the app.
 5. Project Settings → API: copy the URL, the anon key and the service-role key.

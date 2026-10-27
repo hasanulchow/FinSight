@@ -62,4 +62,21 @@ export const api = {
   addHolding: (holding) => request("/portfolio/holdings", { method: "POST", body: JSON.stringify(holding) }),
   deleteHolding: (id) => request(`/portfolio/holdings/${id}`, { method: "DELETE" }),
   xray: ({ analysis = true } = {}) => request(`/portfolio/xray${analysis ? "" : "?analysis=0"}`),
+
+  // Options
+  options: (ticker, { expiration, explain = false } = {}) => {
+    const qs = [expiration && `expiration=${expiration}`, explain && "explain=1"].filter(Boolean).join("&");
+    return request(`/stocks/${encodeURIComponent(ticker)}/options${qs ? `?${qs}` : ""}`);
+  },
+  optionStrategy: (ticker, { strategy, expiration, explain = false }) =>
+    request(`/stocks/${encodeURIComponent(ticker)}/options/strategy`, { method: "POST", body: JSON.stringify({ strategy, expiration, explain }) }),
+  optionStrategies: () => request("/options/strategies"),
+
+  // Backtesting
+  backtestStrategies: () => request("/backtest/strategies"),
+  backtest: (ticker, { strategy, params, cost_bps }) => request(`/stocks/${encodeURIComponent(ticker)}/backtest`, { method: "POST", body: JSON.stringify({ strategy, params, cost_bps }) }),
+
+  // Markets
+  market: () => request("/market/overview"),
+  compare: (tickers, days = 252) => request(`/market/compare?tickers=${encodeURIComponent(tickers.join(","))}&days=${days}`),
 };

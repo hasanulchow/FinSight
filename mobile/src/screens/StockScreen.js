@@ -9,7 +9,7 @@ import EventsCard from "../components/EventsCard";
 import AlertSheet from "../components/AlertSheet";
 
 /** Quick stock view: chart + technicals (AI read on demand), earnings & insiders, alert and briefing actions. */
-export default function StockScreen({ ticker, onBack, onBrief }) {
+export default function StockScreen({ ticker, onBack, onBrief, onOptions, onBacktest }) {
   const [tech, setTech] = useState(null);
   const [techError, setTechError] = useState(null);
   const [explaining, setExplaining] = useState(false);
@@ -71,6 +71,16 @@ export default function StockScreen({ ticker, onBack, onBrief }) {
             <Ionicons name="notifications-outline" size={22} color={colors.primary} />
           </Pressable>
         </View>
+        <View style={styles.tools}>
+          <Pressable style={[styles.tool, { backgroundColor: "#CFFAFE" }]} onPress={() => onOptions(ticker)}>
+            <Ionicons name="options-outline" size={18} color="#0891B2" />
+            <Text style={[styles.toolText, { color: "#0891B2" }]}>Options</Text>
+          </Pressable>
+          <Pressable style={[styles.tool, { backgroundColor: "#FFEDD5" }]} onPress={() => onBacktest(ticker)}>
+            <Ionicons name="flask-outline" size={18} color="#EA580C" />
+            <Text style={[styles.toolText, { color: "#EA580C" }]}>Backtest</Text>
+          </Pressable>
+        </View>
         {toast && <Text style={styles.toast}>{toast}</Text>}
       </View>
 
@@ -100,6 +110,9 @@ const styles = StyleSheet.create({
   price: { fontSize: 22, fontWeight: "800", color: colors.text },
   actions: { flexDirection: "row", gap: 10, marginTop: 16 },
   alertButton: { width: 52, borderRadius: 14, borderWidth: 1.5, borderColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  tools: { flexDirection: "row", gap: 10, marginTop: 10 },
+  tool: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 14, paddingVertical: 12 },
+  toolText: { fontWeight: "800" },
   toast: { color: colors.primaryDark, backgroundColor: colors.primarySoft, borderRadius: 10, padding: 10, marginTop: 10 },
   loading: { flexDirection: "row", gap: 10, alignItems: "center", marginTop: 20, justifyContent: "center" },
   muted: { color: colors.muted },

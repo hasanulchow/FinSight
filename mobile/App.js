@@ -14,9 +14,13 @@ import StockScreen from "./src/screens/StockScreen";
 import ScreenerScreen from "./src/screens/ScreenerScreen";
 import PortfolioScreen from "./src/screens/PortfolioScreen";
 import AlertsScreen from "./src/screens/AlertsScreen";
+import MarketsScreen from "./src/screens/MarketsScreen";
+import OptionsScreen from "./src/screens/OptionsScreen";
+import BacktestScreen from "./src/screens/BacktestScreen";
 
 const TABS = [
   { key: "research", label: "Research", icon: "search" },
+  { key: "markets", label: "Markets", icon: "globe" },
   { key: "screener", label: "Screener", icon: "funnel" },
   { key: "portfolio", label: "Portfolio", icon: "pie-chart" },
   { key: "alerts", label: "Alerts", icon: "notifications" },
@@ -75,7 +79,20 @@ export default function App() {
   const top = stack[stack.length - 1];
   if (!session) screen = <LoginScreen />;
   else if (top?.type === "briefing") screen = <BriefingScreen key={top.id} id={top.id} onBack={pop} onOpenStock={openStock} />;
-  else if (top?.type === "stock") screen = <StockScreen key={top.ticker} ticker={top.ticker} onBack={pop} onBrief={briefTicker} />;
+  else if (top?.type === "stock") {
+    screen = (
+      <StockScreen
+        key={top.ticker}
+        ticker={top.ticker}
+        onBack={pop}
+        onBrief={briefTicker}
+        onOptions={(t) => push({ type: "options", ticker: t })}
+        onBacktest={(t) => push({ type: "backtest", ticker: t })}
+      />
+    );
+  } else if (top?.type === "options") screen = <OptionsScreen key={`o-${top.ticker}`} ticker={top.ticker} onBack={pop} />;
+  else if (top?.type === "backtest") screen = <BacktestScreen key={`b-${top.ticker}`} ticker={top.ticker} onBack={pop} />;
+  else if (tab === "markets") screen = <MarketsScreen onOpenStock={openStock} />;
   else if (tab === "screener") screen = <ScreenerScreen onOpenStock={openStock} />;
   else if (tab === "portfolio") screen = <PortfolioScreen onOpenStock={openStock} />;
   else if (tab === "alerts") screen = <AlertsScreen onOpenStock={openStock} onUnreadChange={setUnread} />;

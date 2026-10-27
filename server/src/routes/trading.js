@@ -11,6 +11,11 @@ import { listNotifications, markRead, registerPushToken } from "../lib/notify.js
 import { runScreen, universe, NUMERIC_FIELDS } from "../lib/screener.js";
 import { computeXray, deleteHolding, listHoldings, parseHoldingsCsv, portfolioAnalyst, upsertHoldings } from "../lib/portfolio.js";
 import { runJobs } from "../lib/jobs.js";
+import { getOptionsOverview, strategyFromOverview, STRATEGIES } from "../lib/options.js";
+import { optionsAnalyst } from "../agents/optionsAnalyst.js";
+import { runBacktest, BACKTEST_STRATEGIES } from "../lib/backtest.js";
+import { getMarketOverview, compareTickers } from "../lib/market.js";
+import { getEarningsCalendar } from "../tools/quote.js";
 
 // Routes for the trading features: technical analysis, alerts + notifications, screener,
 // earnings & insiders, portfolio X-ray, and the scheduled-jobs trigger.
@@ -130,6 +135,64 @@ export function registerTradingRoutes(app) {
       analysis = await portfolioAnalyst(xray).catch((err) => (console.error("Portfolio analyst:", err.message), null));
     }
     res.json({ ...xray, analysis });
+  }));
+
+  // ---------- Options ----------
+  const nextEarnings = async (ticker) => {
+    const from = new Date().toISOString().slice(0, 10);
+    const to = new Date(Date.now() + 90 * 86_400_000).toISOString().slice(0, 10);
+    return (await getEarningsCalendar({ from, to, ticker }).catch(() => []))[0] ?? null;
+  };
+  const expirationParam = (v) => (v && /^\d{4}-\d{2}-\d{2}$/.test(String(v)) ? String(v) : undefined);
+
+  app.get("/options/strategies", requireUser, (_req, res) => res.json(Object.entries(STRATEGIES).map(([key, s]) => ({ key, ...s }))));
+
+  app.get("/stocks/:ticker/options", requireUser, handle(async (req, res) => {
+    const ticker = tickerParam(req, res);
+    if (!ticker) return;
+    const overview = await getOptionsOverview(ticker, { expiration: expirationParam(req.query.expiration) });
+    const earnings = await nextEarnings(ticker);
+    let ai = null;
+    if (req.query.explain === "1") {
+      if (!aiLimit(req.user.id)) return res.status(429).json({ error: "Hourly limit for AI tools reached. Try again later." });
+      ai = enforceOutput(await optionsAnalyst({ overview, nextEarnings: earnings })).value;
+    }
+    res.json({ ...overview, next_earnings: earnings, ai });
+  }));
+
+  app.post("/stocks/:ticker/options/strategy", requireUser, handle(async (req, res) => {
+    const ticker = tickerParam(req, res);
+    if (!ticker) return;
+    const name = String(req.body?.strategy ?? "");
+    if (!STRATEGIES[name]) return res.status(400).json({ error: `Unknown strategy. Use one of: ${Object.keys(STRATEGIES).join(", ")}` });
+    const overview = await getOptionsOverview(ticker, { expiration: expirationParam(req.body?.expiration) });
+    const strategy = strategyFromOverview(overview, name);
+    // `analysis` is the payoff math; the AI explanation goes in `ai`
+    let ai = null;
+    if (req.body?.explain) {
+      if (!aiLimit(req.user.id)) return res.status(429).json({ error: "Hourly limit for AI tools reached. Try again later." });
+      ai = enforceOutput(await optionsAnalyst({ overview, strategy, nextEarnings: await nextEarnings(ticker) })).value;
+    }
+    res.json({ ...strategy, data_source: overview.data_source, ai });
+  }));
+
+  // ---------- Backtesting ----------
+  app.get("/backtest/strategies", requireUser, (_req, res) =>
+    res.json(Object.entries(BACKTEST_STRATEGIES).map(([key, s]) => ({ key, label: s.label, params: s.params, rules: s.describe(s.params) })))
+  );
+  app.post("/stocks/:ticker/backtest", requireUser, handle(async (req, res) => {
+    const ticker = tickerParam(req, res);
+    if (!ticker) return;
+    const bars = await getDailyBars(ticker);
+    const costBps = Math.min(100, Math.max(0, Number(req.body?.cost_bps ?? 5)));
+    res.json({ ticker, ...runBacktest(bars, { strategy: String(req.body?.strategy ?? ""), params: req.body?.params ?? {}, costBps }) });
+  }));
+
+  // ---------- Markets ----------
+  app.get("/market/overview", requireUser, handle(async (_req, res) => res.json(await getMarketOverview())));
+  app.get("/market/compare", requireUser, handle(async (req, res) => {
+    const tickers = String(req.query.tickers ?? "").split(",");
+    res.json(await compareTickers(tickers, Math.min(500, Math.max(20, Number(req.query.days) || 252))));
   }));
 
   // ---------- Scheduled jobs ----------

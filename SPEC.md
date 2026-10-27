@@ -533,3 +533,52 @@ AI-backed tools (screener, X-ray analysis, chart explanations) are limited per u
 
 ### 17.8 New configuration
 `MASSIVE_API_KEY` (or `POLYGON_API_KEY`), `PRICES_API_BASE`, `PRICES_RPM`, `JOBS_INTERVAL_MINUTES`, `CRON_SECRET`, `SCREENER_BATCH`, `SCREENER_UNIVERSE`, `AI_TOOLS_PER_HOUR`, `FINNHUB_API_BASE`.
+
+---
+
+## 18. v1.3 Options, Backtesting and Markets
+
+Schema: `supabase/004_options_markets.sql` adds `kv_cache`, a shared cache for options overviews and market snapshots.
+
+### 18.1 Options math (`lib/optionsMath.js`)
+- **Pricing:** Black-Scholes-Merton with greeks (theta per day; vega and rho per 1 percentage point), checked against textbook values (S=K=100, T=1, σ=20%, r=5%: call 10.4506, put 5.5735, call delta 0.6368).
+- **Volatility:** implied volatility by bisection, and annualized close-to-close historical volatility.
+- **Probabilities:** lognormal probability of finishing above a level, and the expected move (S·σ·√T).
+- **Strategy analysis:** payoff at expiration and today, breakevens (sign change plus bisection), max profit and loss with unbounded detection, probability of profit (lognormal integration), net premium and position greeks.
+
+### 18.2 Options data (`lib/options.js`)
+- **Free plan:**
+  - Inputs: the contract list (strikes and expirations within 75 days), the live underlying quote, and the previous close of the ATM call and put.
+  - ATM implied volatility is solved from those prices, and every strike is modeled at that volatility. The response is labeled `data_source: "model"`.
+- **Paid plan:** the chain snapshot (`data_source: "market"`), with put/call volume and open-interest ratios and max pain.
+- **Default expiration:** the first one at least 5 days out.
+- **Other outputs:** the probability of finishing above the technical support/resistance levels and ±1 expected move.
+- **Caching:** 6 hours per ticker and expiration.
+- **Options Analyst agent:** gives an IV regime, volatility and expected-move readings, a strategy explanation, key risks and a tip. It is told about earnings before expiration and never recommends trades.
+
+### 18.3 Backtester (`lib/backtest.js`)
+- **Rules:** long-only. Signals are computed at the close and filled at the next open; costs default to 5 bps per side.
+- **Strategies:** `sma_cross`, `rsi_reversion`, `macd_cross`, `breakout`, `trend_filter`, each with editable parameters.
+- **Output:** stats for the strategy and buy-and-hold (total return, CAGR, max drawdown, Sharpe, volatility, exposure, trades, win rate, average trade), equity and drawdown curves downsampled to about 250 points, and the last 50 trades.
+
+### 18.4 Markets (`lib/market.js`)
+- **Data:** two grouped-daily calls (latest two published sessions; a 403 on the current day falls back to the previous one), cached 3 hours.
+- **Output:**
+  - Index and sector ETF changes
+  - Breadth across stocks priced $1+ with 100k+ volume
+  - Gainers, losers and most active among liquid names ($5+, $20M+ traded)
+  - A heatmap of the screener universe by sector, sized by market cap
+- **Compare:** up to 5 tickers rebased to 0% on common dates.
+
+### 18.5 New endpoints
+- **Options:** `GET /options/strategies`, `GET /stocks/:ticker/options[?expiration=&explain=1]` (AI read in `ai`), `POST /stocks/:ticker/options/strategy {strategy, expiration?, explain?}` (payoff math in `analysis`, AI read in `ai`)
+- **Backtesting:** `GET /backtest/strategies`, `POST /stocks/:ticker/backtest {strategy, params?, cost_bps?}`
+- **Markets:** `GET /market/overview`, `GET /market/compare?tickers=A,B&days=N`
+
+### 18.6 App
+- **Markets tab:** indices, breadth, sectors, heatmap, movers and the compare chart.
+- **Stock screen:** new **Options** and **Backtest** buttons.
+- **New charts:** `PayoffChart` (P/L shading, breakevens, expected-move band, touch readout), `LineChart` (multi-series, fill, zero line, touch) and `Heatmap`.
+
+### 18.7 New configuration
+`RISK_FREE_RATE` (default 0.04).
