@@ -1,17 +1,19 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ScrollView, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../lib/api";
-import { colors } from "../theme";
-import { PrimaryButton, SectionCard } from "../components/ui";
+import { makeStyles, useTheme } from "../theme";
+import { BackButton, Banner, Button, Chip, Disclaimer, Loading, SectionCard, Stat } from "../components/ui";
 import LineChart from "../components/LineChart";
 
-const BT = { color: "#EA580C", soft: "#FFEDD5", icon: "flask-outline" };
 const PARAM_LABELS = { fast: "Fast", slow: "Slow", period: "Period", buy_below: "Buy below", sell_above: "Sell above", signal: "Signal", entry: "Entry high (days)", exit: "Exit low (days)" };
 const fmtDate = (t) => new Date(t).toLocaleDateString(undefined, { month: "short", year: "2-digit" });
 
 /** Strategy backtester: rules -> equity curve vs buy-and-hold, drawdowns, stats, trades. */
 export default function BacktestScreen({ ticker, onBack }) {
+  const { c, sections } = useTheme();
+  const s = useStyles();
+  const sec = sections.backtest;
   const [strategies, setStrategies] = useState([]);
   const [key, setKey] = useState("sma_cross");
   const [params, setParams] = useState({});
@@ -22,14 +24,14 @@ export default function BacktestScreen({ ticker, onBack }) {
   useEffect(() => {
     api.backtestStrategies().then((list) => {
       setStrategies(list);
-      setParams(Object.fromEntries(Object.entries(list.find((s) => s.key === "sma_cross")?.params ?? {}).map(([k, v]) => [k, String(v)])));
+      setParams(Object.fromEntries(Object.entries(list.find((x) => x.key === "sma_cross")?.params ?? {}).map(([k, v]) => [k, String(v)])));
     }).catch((e) => setError(e.message));
   }, []);
 
   function choose(k) {
     setKey(k);
     setResult(null);
-    setParams(Object.fromEntries(Object.entries(strategies.find((s) => s.key === k)?.params ?? {}).map(([p, v]) => [p, String(v)])));
+    setParams(Object.fromEntries(Object.entries(strategies.find((x) => x.key === k)?.params ?? {}).map(([p, v]) => [p, String(v)])));
   }
 
   async function run() {
@@ -47,132 +49,145 @@ export default function BacktestScreen({ ticker, onBack }) {
     if (strategies.length) run();
   }, [strategies.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const s = result?.stats, h = result?.buy_and_hold;
-  const better = (a, b, higher = true) => (a == null || b == null ? colors.text : (higher ? a >= b : a <= b) ? colors.green : colors.red);
+  const st = result?.stats, h = result?.buy_and_hold;
+  const better = (a, b, higher = true) => (a == null || b == null ? c.text : (higher ? a >= b : a <= b) ? c.gain : c.loss);
+  const beat = st && h ? st.total_return_pct >= h.total_return_pct : null;
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }}>
-      <Pressable onPress={onBack} style={styles.back} hitSlop={10}>
-        <Ionicons name="arrow-back" size={20} color={colors.primary} />
-        <Text style={styles.backText}>Back</Text>
-      </Pressable>
+    <ScrollView contentContainerStyle={s.scroll}>
+      <BackButton onPress={onBack} />
 
-      <View style={styles.hero}>
-        <Text style={styles.title}>Backtest {ticker}</Text>
-        <Text style={styles.muted}>Test simple trading rules on ~2 years of daily prices. Trades fill at the next day's open with 5 bps costs.</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 12 }} contentContainerStyle={{ gap: 6 }}>
-          {strategies.map((st) => (
-            <Pressable key={st.key} onPress={() => choose(st.key)} style={[styles.chip, key === st.key && styles.chipActive]}>
-              <Text style={[styles.chipText, key === st.key && { color: colors.white }]}>{st.label}</Text>
-            </Pressable>
-          ))}
+      <View style={s.hero}>
+        <View style={s.heroTop}>
+          <View style={[s.heroIcon, { backgroundColor: sec.soft }]}><Ionicons name="flask" size={22} color={sec.color} /></View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.title}>Backtest {ticker}</Text>
+            <Text style={s.muted}>~2 years of daily prices · next-day open fills · 5 bps costs</Text>
+          </View>
+        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 16 }} contentContainerStyle={{ gap: 6 }}>
+          {strategies.map((x) => <Chip key={x.key} label={x.label} active={key === x.key} onPress={() => choose(x.key)} color={sec.color} />)}
         </ScrollView>
-        <View style={styles.params}>
+        <View style={s.params}>
           {Object.entries(params).map(([p, v]) => (
-            <View key={p} style={styles.param}>
-              <Text style={styles.paramLabel}>{PARAM_LABELS[p] ?? p}</Text>
-              <TextInput style={styles.paramInput} value={v} onChangeText={(t) => setParams((x) => ({ ...x, [p]: t.replace(/[^0-9.]/g, "") }))} keyboardType="number-pad" />
+            <View key={p} style={s.param}>
+              <Text style={s.paramLabel}>{PARAM_LABELS[p] ?? p}</Text>
+              <TextInput style={s.paramInput} value={v} onChangeText={(t) => setParams((x) => ({ ...x, [p]: t.replace(/[^0-9.]/g, "") }))} keyboardType="number-pad" />
             </View>
           ))}
         </View>
-        <PrimaryButton title="Run backtest" icon="play" onPress={run} loading={busy} style={{ marginTop: 12 }} />
-        {error && <Text style={styles.error}>{error}</Text>}
+        <Button title="Run backtest" icon="play" onPress={run} loading={busy} size="lg" style={{ marginTop: 14 }} />
+        {error && <Banner tone="error">{error}</Banner>}
       </View>
 
-      {busy && !result && <ActivityIndicator color={BT.color} style={{ marginTop: 20 }} />}
+      {busy && !result && <Loading text="Running the backtest…" />}
 
       {result && (
         <>
-          <SectionCard title="Equity curve" section={BT}>
-            <Text style={styles.rules}>{result.rules}</Text>
+          <SectionCard title="Equity curve" subtitle={`$10,000 · ${result.period.from} to ${result.period.to}`} section={sec}>
+            <Text style={s.rules}>{result.rules}</Text>
+            <View style={[s.verdict, { backgroundColor: c.soft(beat ? c.gain : c.loss) }]}>
+              <Ionicons name={beat ? "trophy-outline" : "trending-down-outline"} size={16} color={beat ? c.gain : c.loss} />
+              <Text style={[s.verdictText, { color: c.text }]}>
+                Strategy {st.total_return_pct >= 0 ? "+" : ""}{st.total_return_pct}% vs buy & hold {h.total_return_pct >= 0 ? "+" : ""}{h.total_return_pct}% · max drawdown {st.max_drawdown_pct}% vs {h.max_drawdown_pct}%
+              </Text>
+            </View>
             <LineChart
               data={result.curve.map((p) => ({ x: p.t, strategy: p.strategy, hold: p.hold }))}
-              series={[{ key: "strategy", label: "Strategy", color: BT.color, fill: true }, { key: "hold", label: "Buy & hold", color: colors.muted, dashed: true }]}
+              series={[{ key: "strategy", label: "Strategy", color: sec.color, fill: true }, { key: "hold", label: "Buy & hold", color: c.muted, dashed: true }]}
               format={(v) => `$${(v / 1000).toFixed(1)}k`}
               xLabel={(t) => new Date(t).toLocaleDateString()}
+              height={220}
             />
-            <Text style={styles.small}>$10,000 starting capital · {result.period.from} to {result.period.to}</Text>
           </SectionCard>
 
-          <SectionCard title="Strategy vs buy & hold" section={{ ...BT, icon: "stats-chart-outline" }}>
-            <View style={styles.tableHead}>
-              <Text style={[styles.cellLabel, styles.headText]} />
-              <Text style={[styles.cell, styles.headText, { color: BT.color }]}>Strategy</Text>
-              <Text style={[styles.cell, styles.headText]}>Buy & hold</Text>
+          <SectionCard title="Strategy vs buy & hold" section={{ ...sec, icon: "stats-chart-outline" }}>
+            <View style={s.tableHead}>
+              <Text style={[s.cellLabel, s.headText]} />
+              <Text style={[s.cell, s.headText, { color: sec.color }]}>Strategy</Text>
+              <Text style={[s.cell, s.headText]}>Buy & hold</Text>
             </View>
-            <Row label="Total return" a={`${s.total_return_pct}%`} b={`${h.total_return_pct}%`} color={better(s.total_return_pct, h.total_return_pct)} />
-            <Row label="Annualized" a={s.cagr_pct != null ? `${s.cagr_pct}%` : "–"} b={h.cagr_pct != null ? `${h.cagr_pct}%` : "–"} color={better(s.cagr_pct, h.cagr_pct)} />
-            <Row label="Max drawdown" a={`${s.max_drawdown_pct}%`} b={`${h.max_drawdown_pct}%`} color={better(s.max_drawdown_pct, h.max_drawdown_pct)} />
-            <Row label="Sharpe ratio" a={s.sharpe ?? "–"} b={h.sharpe ?? "–"} color={better(s.sharpe, h.sharpe)} />
-            <Row label="Volatility" a={`${s.volatility_pct}%`} b={`${h.volatility_pct}%`} color={better(s.volatility_pct, h.volatility_pct, false)} />
-            <Row label="Time invested" a={`${s.exposure_pct}%`} b="100%" />
-            <Row label="Trades" a={s.trades} b="1" />
-            <Row label="Win rate" a={s.win_rate_pct != null ? `${s.win_rate_pct}%` : "–"} b="–" />
+            <Row label="Total return" a={`${st.total_return_pct}%`} b={`${h.total_return_pct}%`} color={better(st.total_return_pct, h.total_return_pct)} />
+            <Row label="Annualized" a={st.cagr_pct != null ? `${st.cagr_pct}%` : "–"} b={h.cagr_pct != null ? `${h.cagr_pct}%` : "–"} color={better(st.cagr_pct, h.cagr_pct)} />
+            <Row label="Max drawdown" a={`${st.max_drawdown_pct}%`} b={`${h.max_drawdown_pct}%`} color={better(st.max_drawdown_pct, h.max_drawdown_pct)} />
+            <Row label="Sharpe ratio" a={st.sharpe ?? "–"} b={h.sharpe ?? "–"} color={better(st.sharpe, h.sharpe)} />
+            <Row label="Volatility" a={`${st.volatility_pct}%`} b={`${h.volatility_pct}%`} color={better(st.volatility_pct, h.volatility_pct, false)} />
+            <Row label="Time invested" a={`${st.exposure_pct}%`} b="100%" />
+            <Row label="Trades" a={st.trades} b="1" />
+            <Row label="Win rate" a={st.win_rate_pct != null ? `${st.win_rate_pct}%` : "–"} b="–" last />
           </SectionCard>
 
-          <SectionCard title="Drawdowns" section={{ ...BT, icon: "trending-down-outline" }}>
+          <SectionCard title="Drawdowns" subtitle="How far each fell from its previous peak" section={{ ...sec, icon: "trending-down-outline" }}>
             <LineChart
               data={result.curve.map((p) => ({ x: p.t, dd: p.dd, dd_hold: p.dd_hold }))}
-              series={[{ key: "dd", label: "Strategy", color: colors.red, fill: true }, { key: "dd_hold", label: "Buy & hold", color: colors.muted, dashed: true }]}
+              series={[{ key: "dd", label: "Strategy", color: c.loss, fill: true }, { key: "dd_hold", label: "Buy & hold", color: c.muted, dashed: true }]}
               format={(v) => `${v.toFixed(0)}%`}
-              height={140}
+              height={150}
               xLabel={(t) => new Date(t).toLocaleDateString()}
               zero
             />
-            <Text style={styles.small}>How far each approach fell from its previous peak.</Text>
           </SectionCard>
 
-          <SectionCard title={`Trades (${result.trades.length})`} section={{ ...BT, icon: "swap-horizontal-outline" }}>
-            {result.trades.length === 0 && <Text style={styles.muted}>No trades were triggered in this period.</Text>}
+          <SectionCard title={`Trades · ${result.trades.length}`} section={{ ...sec, icon: "swap-horizontal-outline" }}>
+            {result.trades.length === 0 && <Text style={s.muted}>No trades were triggered in this period.</Text>}
+            <View style={s.statsRow}>
+              {st.avg_trade_pct != null && <Stat label="Avg trade" value={`${st.avg_trade_pct}%`} color={st.avg_trade_pct >= 0 ? c.gain : c.loss} />}
+              {st.win_rate_pct != null && <Stat label="Win rate" value={`${st.win_rate_pct}%`} />}
+            </View>
             {[...result.trades].reverse().slice(0, 20).map((t, i) => (
-              <View key={i} style={styles.trade}>
-                <Text style={styles.tradeDates}>{fmtDate(t.entry_date)} → {t.exit_date ? fmtDate(t.exit_date) : "open"}</Text>
-                <Text style={styles.small}>${t.entry_price} → {t.exit_price ? `$${t.exit_price}` : "now"}</Text>
-                <Text style={[styles.tradeRet, { color: (t.return_pct ?? 0) >= 0 ? colors.green : colors.red }]}>{t.return_pct >= 0 ? "+" : ""}{t.return_pct}%</Text>
+              <View key={i} style={s.trade}>
+                <View style={[s.tradeDot, { backgroundColor: (t.return_pct ?? 0) >= 0 ? c.gain : c.loss }]} />
+                <View style={{ flex: 1 }}>
+                  <Text style={s.tradeDates}>{fmtDate(t.entry_date)} → {t.exit_date ? fmtDate(t.exit_date) : "open"}</Text>
+                  <Text style={s.small}>${t.entry_price} → {t.exit_price ? `$${t.exit_price}` : "now"}</Text>
+                </View>
+                <Text style={[s.tradeRet, { color: (t.return_pct ?? 0) >= 0 ? c.gain : c.loss }]}>{t.return_pct >= 0 ? "+" : ""}{t.return_pct}%</Text>
               </View>
             ))}
           </SectionCard>
 
-          <Text style={styles.disclaimer}>Past performance doesn't predict future results. Backtests ignore taxes, slippage beyond the cost assumption, and dividends. Educational only.</Text>
+          <Disclaimer>Past performance doesn't predict future results. Backtests ignore taxes, dividends and slippage beyond the cost assumption. Educational only.</Disclaimer>
         </>
       )}
     </ScrollView>
   );
 }
 
-function Row({ label, a, b, color = colors.text }) {
+function Row({ label, a, b, color, last }) {
+  const { c } = useTheme();
+  const s = useStyles();
   return (
-    <View style={styles.row}>
-      <Text style={styles.cellLabel}>{label}</Text>
-      <Text style={[styles.cell, { color, fontWeight: "800" }]}>{a}</Text>
-      <Text style={styles.cell}>{b}</Text>
+    <View style={[s.row, last && { borderBottomWidth: 0 }]}>
+      <Text style={s.cellLabel}>{label}</Text>
+      <Text style={[s.cell, { color: color ?? c.text, fontWeight: "800" }]}>{a}</Text>
+      <Text style={[s.cell, { color: c.textSecondary }]}>{b}</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  back: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 6, alignSelf: "flex-start" },
-  backText: { color: colors.primary, fontWeight: "700", fontSize: 16 },
-  hero: { backgroundColor: colors.card, borderRadius: 22, padding: 18, marginTop: 8 },
-  title: { fontSize: 24, fontWeight: "800", color: colors.text },
-  muted: { color: colors.muted, marginTop: 4, lineHeight: 19 },
-  small: { color: colors.muted, fontSize: 12, marginTop: 6 },
-  error: { color: colors.red, marginTop: 10 },
-  chip: { borderWidth: 1.5, borderColor: BT.soft, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
-  chipActive: { backgroundColor: BT.color, borderColor: BT.color },
-  chipText: { color: BT.color, fontWeight: "700", fontSize: 13 },
-  params: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
+const useStyles = makeStyles((c) => ({
+  scroll: { padding: 16, paddingBottom: 60 },
+  hero: { backgroundColor: c.surface, borderRadius: 24, borderWidth: 1, borderColor: c.border, padding: 20, marginTop: 8 },
+  heroTop: { flexDirection: "row", alignItems: "center", gap: 14 },
+  heroIcon: { width: 48, height: 48, borderRadius: 16, alignItems: "center", justifyContent: "center" },
+  title: { fontSize: 22, fontWeight: "800", color: c.text, letterSpacing: -0.4 },
+  muted: { color: c.textSecondary, marginTop: 2, fontSize: 13 },
+  small: { color: c.muted, fontSize: 12, marginTop: 2 },
+  params: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 },
   param: { minWidth: "30%", flex: 1 },
-  paramLabel: { color: colors.muted, fontSize: 11, marginBottom: 4 },
-  paramInput: { borderWidth: 1.5, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, fontSize: 15, fontWeight: "700", color: colors.text },
-  rules: { color: colors.text, fontSize: 13, marginBottom: 10, lineHeight: 19 },
-  tableHead: { flexDirection: "row", paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: colors.border },
-  headText: { fontWeight: "800", color: colors.muted, fontSize: 12 },
-  row: { flexDirection: "row", paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: colors.border },
-  cellLabel: { flex: 1.3, color: colors.text, fontSize: 13 },
-  cell: { flex: 1, textAlign: "right", color: colors.text, fontSize: 13 },
-  trade: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: colors.border },
-  tradeDates: { flex: 1, color: colors.text, fontWeight: "600", fontSize: 13 },
-  tradeRet: { width: 64, textAlign: "right", fontWeight: "800" },
-  disclaimer: { color: colors.muted, fontSize: 11, marginTop: 20, textAlign: "center" },
-});
+  paramLabel: { color: c.muted, fontSize: 11, marginBottom: 5, fontWeight: "600" },
+  paramInput: { borderWidth: 1, borderColor: c.border, backgroundColor: c.surfaceAlt, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: 16, fontWeight: "700", color: c.text, outlineStyle: "none" },
+  rules: { color: c.textSecondary, fontSize: 13, marginBottom: 10, lineHeight: 19 },
+  verdict: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 12, padding: 10, marginBottom: 12 },
+  verdictText: { flex: 1, fontSize: 13, fontWeight: "600" },
+  tableHead: { flexDirection: "row", paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: c.border },
+  headText: { fontWeight: "700", color: c.muted, fontSize: 12 },
+  row: { flexDirection: "row", paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: c.border },
+  cellLabel: { flex: 1.3, color: c.text, fontSize: 14 },
+  cell: { flex: 1, textAlign: "right", color: c.text, fontSize: 14, fontVariant: ["tabular-nums"] },
+  statsRow: { flexDirection: "row", gap: 8, marginBottom: 8 },
+  trade: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: c.border },
+  tradeDot: { width: 8, height: 8, borderRadius: 4 },
+  tradeDates: { color: c.text, fontWeight: "600", fontSize: 14 },
+  tradeRet: { width: 72, textAlign: "right", fontWeight: "800", fontVariant: ["tabular-nums"] },
+}));

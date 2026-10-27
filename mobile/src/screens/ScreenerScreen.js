@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../lib/api";
-import { colors } from "../theme";
-import { Pill, TickerAvatar } from "../components/ui";
+import { makeStyles, useTheme } from "../theme";
+import { Banner, Input, PageHeader, Pill, TickerAvatar } from "../components/ui";
 
 const EXAMPLES = [
   "Oversold large caps above their 200-day average",
@@ -12,10 +12,13 @@ const EXAMPLES = [
   "Fast-growing companies in an uptrend",
   "Beaten-down stocks with RSI under 35",
 ];
-const FIELD_LABELS = { pe: "P/E", rsi14: "RSI", dividend_yield: "Yield %", market_cap_b: "Cap $B", change_1m: "1M %", change_1y: "1Y %", revenue_growth: "Rev growth %", pct_from_52w_high: "From high %", price: "Price", eps_growth: "EPS growth %", net_margin: "Net margin %", beta: "Beta", change_1d: "1D %", change_1w: "1W %", change_3m: "3M %", pct_above_sma200: "vs 200d %", volume_ratio: "Vol x", atr_pct: "ATR %" };
+const FIELD_LABELS = { pe: "P/E", rsi14: "RSI", dividend_yield: "Yield %", market_cap_b: "Cap $B", change_1m: "1M %", change_1y: "1Y %", revenue_growth: "Rev growth %", pct_from_52w_high: "From high %", price: "Price", eps_growth: "EPS growth %", net_margin: "Net margin %", beta: "Beta", change_1d: "1D %", change_1w: "1W %", change_3m: "3M %", pct_above_sma200: "vs 200d %", volume_ratio: "Vol ×", atr_pct: "ATR %" };
 
 /** Natural-language stock screener. */
 export default function ScreenerScreen({ onOpenStock }) {
+  const { c, sections } = useTheme();
+  const s = useStyles();
+  const sec = sections.screener;
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
@@ -35,41 +38,37 @@ export default function ScreenerScreen({ onOpenStock }) {
     setBusy(false);
   }
 
-  // Columns to show: the fields the user filtered/sorted on, then a couple of defaults
-  const shown = result
-    ? [...new Set([...(result.filters?.numeric_filters ?? []).map((f) => f.field), result.filters?.sort_by, "rsi14", "change_1m"].filter(Boolean))].slice(0, 3)
-    : [];
+  // Columns: the fields the user filtered or sorted on, then a couple of defaults
+  const shown = result ? [...new Set([...(result.filters?.numeric_filters ?? []).map((f) => f.field), result.filters?.sort_by, "rsi14", "change_1m"].filter(Boolean))].slice(0, 3) : [];
+  const f = result?.filters;
 
   const header = (
     <View>
-      <View style={styles.hero}>
-        <Text style={styles.heroTitle}>Screener</Text>
-        <Text style={styles.heroSub}>Describe what you want in plain English. AI turns it into filters over {result?.coverage?.split("/")[1] ?? "100"} large US stocks.</Text>
-      </View>
-      <View style={styles.searchCard}>
-        <View style={styles.inputRow}>
-          <Ionicons name="funnel-outline" size={20} color={colors.primary} />
-          <TextInput
-            style={styles.input}
-            placeholder="e.g. cheap profitable stocks in an uptrend"
-            placeholderTextColor={colors.muted}
-            value={query}
-            onChangeText={(t) => { setQuery(t); setError(null); }}
-            onSubmitEditing={() => run()}
-            returnKeyType="search"
-            multiline={false}
-          />
-          <Pressable style={[styles.go, busy && { opacity: 0.5 }]} onPress={() => run()} disabled={busy} accessibilityLabel="Run screen">
-            {busy ? <ActivityIndicator color={colors.white} size="small" /> : <Ionicons name="arrow-forward" size={20} color={colors.white} />}
-          </Pressable>
-        </View>
-        {error && <Text style={styles.error}>{error}</Text>}
+      <PageHeader eyebrow="Screener" title="Describe it. AI finds it." subtitle="Plain-English screens over about 100 large US stocks, with a note on every match." />
+      <View style={s.searchCard}>
+        <Input
+          icon="funnel-outline"
+          placeholder="e.g. cheap profitable stocks in an uptrend"
+          value={query}
+          onChangeText={(t) => { setQuery(t); setError(null); }}
+          onSubmitEditing={() => run()}
+          returnKeyType="search"
+          right={
+            <Pressable style={[s.go, busy && { opacity: 0.5 }]} onPress={() => run()} disabled={busy} accessibilityLabel="Run screen">
+              {busy ? <ActivityIndicator color={c.onPrimary} size="small" /> : <Ionicons name="arrow-forward" size={18} color={c.onPrimary} />}
+            </Pressable>
+          }
+          style={{ paddingRight: 5 }}
+        />
+        {error && <Banner tone="error">{error}</Banner>}
         {!result && (
-          <View style={styles.examples}>
+          <View style={s.examples}>
+            <Text style={s.label}>Try one of these</Text>
             {EXAMPLES.map((e) => (
-              <Pressable key={e} style={styles.example} onPress={() => run(e)} disabled={busy}>
-                <Ionicons name="sparkles-outline" size={14} color={colors.primary} />
-                <Text style={styles.exampleText}>{e}</Text>
+              <Pressable key={e} style={({ hovered }) => [s.example, hovered && { backgroundColor: sec.soft }]} onPress={() => run(e)} disabled={busy}>
+                <Ionicons name="sparkles-outline" size={15} color={sec.color} />
+                <Text style={s.exampleText}>{e}</Text>
+                <Ionicons name="arrow-forward" size={15} color={c.muted} />
               </Pressable>
             ))}
           </View>
@@ -77,19 +76,17 @@ export default function ScreenerScreen({ onOpenStock }) {
       </View>
 
       {result && (
-        <View style={styles.summary}>
-          <Text style={styles.interpretation}>{result.filters?.interpretation}</Text>
-          <View style={styles.filterChips}>
-            {(result.filters?.numeric_filters ?? []).map((f, i) => (
-              <Pill key={i} text={`${FIELD_LABELS[f.field] ?? f.field} ${f.op === "gt" ? ">" : "<"} ${f.value}`} color={colors.primary} />
-            ))}
-            {result.filters?.sectors?.map((s) => <Pill key={s} text={s} color="#0D9488" />)}
-            {result.filters?.trend !== "any" && <Pill text={result.filters?.trend} color="#0284C7" />}
-            {result.filters?.technical_rating !== "any" && <Pill text={`${result.filters?.technical_rating} rating`} color="#7C3AED" />}
-            {result.filters?.above_sma200 !== "any" && <Pill text={`${result.filters?.above_sma200 === "yes" ? "above" : "below"} 200-day`} color="#D97706" />}
+        <View style={s.summary}>
+          <Text style={s.interpretation}>{f?.interpretation}</Text>
+          <View style={s.filterChips}>
+            {(f?.numeric_filters ?? []).map((x, i) => <Pill key={i} text={`${FIELD_LABELS[x.field] ?? x.field} ${x.op === "gt" ? ">" : "<"} ${x.value}`} color={c.primary} />)}
+            {f?.sectors?.map((x) => <Pill key={x} text={x} color={c.hue("teal")} />)}
+            {f?.trend !== "any" && <Pill text={f?.trend} color={c.hue("sky")} />}
+            {f?.technical_rating !== "any" && <Pill text={`${f?.technical_rating} rating`} color={c.hue("violet")} />}
+            {f?.above_sma200 !== "any" && <Pill text={`${f?.above_sma200 === "yes" ? "above" : "below"} 200-day`} color={c.hue("amber")} />}
           </View>
-          {result.summary ? <Text style={styles.summaryText}>{result.summary}</Text> : null}
-          <Text style={styles.meta}>{result.results.length} matches · data for {result.coverage} stocks{result.data_as_of ? ` · as of ${new Date(result.data_as_of).toLocaleDateString()}` : ""}</Text>
+          {result.summary ? <Text style={s.summaryText}>{result.summary}</Text> : null}
+          <Text style={s.meta}>{result.results.length} matches · data for {result.coverage} stocks{result.data_as_of ? ` · as of ${new Date(result.data_as_of).toLocaleDateString()}` : ""}</Text>
         </View>
       )}
     </View>
@@ -100,57 +97,57 @@ export default function ScreenerScreen({ onOpenStock }) {
       data={result?.results ?? []}
       keyExtractor={(r) => r.ticker}
       ListHeaderComponent={header}
-      contentContainerStyle={{ paddingBottom: 40 }}
+      contentContainerStyle={s.list}
       renderItem={({ item }) => (
-        <Pressable style={({ pressed }) => [styles.row, pressed && { opacity: 0.85 }]} onPress={() => onOpenStock(item.ticker)}>
-          <View style={styles.rowTop}>
-            <TickerAvatar ticker={item.ticker} size={40} />
+        <Pressable style={({ pressed, hovered }) => [s.row, hovered && { borderColor: c.borderStrong }, pressed && { opacity: 0.85 }]} onPress={() => onOpenStock(item.ticker)}>
+          <View style={s.rowTop}>
+            <TickerAvatar ticker={item.ticker} size={42} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.rowTitle} numberOfLines={1}>{item.name}</Text>
-              <Text style={styles.rowSub}>{item.ticker} · {item.sector} · ${item.price}</Text>
+              <Text style={s.rowTitle} numberOfLines={1}>{item.name}</Text>
+              <Text style={s.rowSub}>{item.ticker} · {item.sector} · ${item.price}</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+            {item.change_1d != null && (
+              <Text style={[s.rowChange, { color: item.change_1d >= 0 ? c.gain : c.loss }]}>{item.change_1d >= 0 ? "+" : ""}{item.change_1d}%</Text>
+            )}
+            <Ionicons name="chevron-forward" size={18} color={c.muted} />
           </View>
-          <View style={styles.metrics}>
-            {shown.map((f) => (
-              <View key={f} style={styles.metric}>
-                <Text style={styles.metricLabel}>{FIELD_LABELS[f] ?? f}</Text>
-                <Text style={styles.metricValue}>{item[f] ?? "–"}</Text>
+          <View style={s.metrics}>
+            {shown.map((k) => (
+              <View key={k} style={s.metric}>
+                <Text style={s.metricLabel}>{FIELD_LABELS[k] ?? k}</Text>
+                <Text style={s.metricValue}>{item[k] ?? "–"}</Text>
               </View>
             ))}
           </View>
-          {item.note && <Text style={styles.note}>{item.note}</Text>}
+          {item.note && <Text style={s.note}>{item.note}</Text>}
         </Pressable>
       )}
-      ListEmptyComponent={result && !busy ? <Text style={[styles.meta, { marginHorizontal: 16 }]}>No matches. Try loosening a condition.</Text> : null}
+      ListEmptyComponent={result && !busy ? <Text style={s.meta}>No matches. Try loosening a condition.</Text> : null}
     />
   );
 }
 
-const styles = StyleSheet.create({
-  hero: { backgroundColor: "#0D9488", padding: 20, paddingBottom: 60, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
-  heroTitle: { color: colors.white, fontSize: 26, fontWeight: "800" },
-  heroSub: { color: "#CCFBF1", fontSize: 14, marginTop: 6, lineHeight: 20 },
-  searchCard: { backgroundColor: colors.card, marginHorizontal: 16, marginTop: -40, borderRadius: 22, padding: 14, shadowColor: "#1E1B4B", shadowOpacity: 0.1, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 4 },
-  inputRow: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1.5, borderColor: colors.primarySoft, borderRadius: 14, paddingLeft: 12, backgroundColor: "#FAFAFF" },
-  input: { flex: 1, paddingVertical: 13, fontSize: 15, color: colors.text },
-  go: { width: 44, height: 44, borderRadius: 12, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", margin: 3 },
-  error: { color: colors.red, marginTop: 8 },
-  examples: { marginTop: 12, gap: 8 },
-  example: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.primarySoft, borderRadius: 12, padding: 10 },
-  exampleText: { color: colors.primaryDark, fontWeight: "600", flex: 1 },
-  summary: { margin: 16, marginBottom: 4 },
-  interpretation: { fontWeight: "800", color: colors.text, fontSize: 16 },
-  filterChips: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },
-  summaryText: { color: colors.text, marginTop: 10, lineHeight: 20 },
-  meta: { color: colors.muted, fontSize: 12, marginTop: 8 },
-  row: { backgroundColor: colors.card, borderRadius: 18, padding: 14, marginHorizontal: 16, marginTop: 10, shadowColor: "#1E1B4B", shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 1 },
+const useStyles = makeStyles((c) => ({
+  list: { padding: 16, paddingBottom: 40 },
+  searchCard: { backgroundColor: c.surface, borderRadius: 24, borderWidth: 1, borderColor: c.border, padding: 14 },
+  go: { width: 40, height: 40, borderRadius: 12, backgroundColor: c.primary, alignItems: "center", justifyContent: "center" },
+  label: { color: c.muted, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6, marginTop: 4 },
+  examples: { marginTop: 14, gap: 4 },
+  example: { flexDirection: "row", alignItems: "center", gap: 10, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 11 },
+  exampleText: { color: c.text, fontWeight: "500", flex: 1, fontSize: 14 },
+  summary: { marginTop: 18, marginBottom: 4 },
+  interpretation: { fontWeight: "800", color: c.text, fontSize: 17, letterSpacing: -0.2 },
+  filterChips: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 },
+  summaryText: { color: c.textSecondary, marginTop: 12, lineHeight: 21, fontSize: 14 },
+  meta: { color: c.muted, fontSize: 12, marginTop: 10 },
+  row: { backgroundColor: c.surface, borderRadius: 20, borderWidth: 1, borderColor: c.border, padding: 14, marginTop: 10 },
   rowTop: { flexDirection: "row", alignItems: "center", gap: 12 },
-  rowTitle: { fontWeight: "800", color: colors.text, fontSize: 15 },
-  rowSub: { color: colors.muted, fontSize: 12, marginTop: 2 },
-  metrics: { flexDirection: "row", gap: 8, marginTop: 10 },
-  metric: { flex: 1, backgroundColor: colors.bg, borderRadius: 10, padding: 8 },
-  metricLabel: { color: colors.muted, fontSize: 11 },
-  metricValue: { color: colors.text, fontWeight: "800", fontSize: 15, marginTop: 2 },
-  note: { color: colors.text, fontSize: 13, lineHeight: 19, marginTop: 10 },
-});
+  rowTitle: { fontWeight: "700", color: c.text, fontSize: 15 },
+  rowSub: { color: c.muted, fontSize: 12, marginTop: 2 },
+  rowChange: { fontWeight: "800", fontSize: 13, fontVariant: ["tabular-nums"] },
+  metrics: { flexDirection: "row", gap: 8, marginTop: 12 },
+  metric: { flex: 1, backgroundColor: c.surfaceAlt, borderRadius: 12, padding: 10 },
+  metricLabel: { color: c.muted, fontSize: 11 },
+  metricValue: { color: c.text, fontWeight: "800", fontSize: 15, marginTop: 2, fontVariant: ["tabular-nums"] },
+  note: { color: c.textSecondary, fontSize: 13, lineHeight: 19, marginTop: 12 },
+}));

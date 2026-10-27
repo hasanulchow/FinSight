@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
+import Svg, { Circle } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../lib/api";
-import { colors, formatMoney, tickerColor } from "../theme";
-import { Bullets, Pill, PrimaryButton, SectionCard, TickerAvatar } from "../components/ui";
+import { formatMoney, makeStyles, useTheme } from "../theme";
+import { Banner, Bullets, Button, Disclaimer, EmptyState, Input, Loading, PageHeader, Pill, SectionCard, Stat, TickerAvatar } from "../components/ui";
 
-const xraySection = { color: "#7C3AED", soft: "#F3E8FF", icon: "scan-outline" };
-const RISK = { low: colors.green, moderate: colors.amber, elevated: "#EA580C", high: colors.red };
 const CSV_EXAMPLE = "Symbol,Quantity,Average Cost\nAAPL,10,150\nMSFT,5,300\nNVDA,20,";
+const DONUT_HUES = ["indigo", "sky", "emerald", "amber", "rose", "violet", "teal", "orange", "fuchsia", "blue"];
 
-/** Portfolio X-ray: holdings, allocation, concentration, technical health, upcoming earnings, AI read. */
+/** Portfolio X-ray: holdings, allocation, concentration, chart health, upcoming earnings, AI read. */
 export default function PortfolioScreen({ onOpenStock }) {
+  const { c, sections } = useTheme();
+  const s = useStyles();
+  const sec = sections.portfolio;
   const [xray, setXray] = useState(null);
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
@@ -49,127 +52,130 @@ export default function PortfolioScreen({ onOpenStock }) {
 
   const empty = xray?.empty;
   const a = xray?.analysis;
+  const RISK = { low: c.gain, moderate: c.warn, elevated: c.hue("orange"), high: c.loss };
+  const up = (xray?.day_change ?? 0) >= 0;
 
   return (
-    <ScrollView contentContainerStyle={{ paddingBottom: 60 }} refreshControl={<RefreshControl refreshing={loading && !!xray} onRefresh={load} tintColor={xraySection.color} />}>
-      <View style={styles.hero}>
-        <Text style={styles.heroLabel}>Portfolio X-ray</Text>
-        {xray && !empty ? (
-          <>
-            <Text style={styles.total}>{formatMoney(xray.total_value)}</Text>
-            <Text style={[styles.dayChange, { color: xray.day_change >= 0 ? "#A7F3D0" : "#FECACA" }]}>
-              {xray.day_change >= 0 ? "▲" : "▼"} {formatMoney(Math.abs(xray.day_change))} ({xray.day_change_pct}%) today
-            </Text>
-            {xray.unrealized_pl != null && <Text style={styles.heroSub}>Unrealized P/L {xray.unrealized_pl >= 0 ? "+" : "-"}{formatMoney(Math.abs(xray.unrealized_pl))} ({xray.unrealized_pl_pct}%)</Text>}
-          </>
-        ) : (
-          <Text style={styles.heroSub}>See concentration, sector exposure, chart health and upcoming earnings across everything you own.</Text>
-        )}
-        <View style={styles.heroActions}>
-          <Pressable style={styles.heroButton} onPress={() => setImportOpen(true)}>
-            <Ionicons name="cloud-upload-outline" size={18} color={colors.white} />
-            <Text style={styles.heroButtonText}>Import CSV</Text>
-          </Pressable>
-          <Pressable style={styles.heroButton} onPress={() => setAddOpen(true)}>
-            <Ionicons name="add" size={18} color={colors.white} />
-            <Text style={styles.heroButtonText}>Add holding</Text>
-          </Pressable>
-        </View>
-      </View>
-
-      <View style={{ padding: 16, paddingTop: 0 }}>
-        {loading && !xray && <ActivityIndicator color={xraySection.color} style={{ marginTop: 30 }} />}
-        {error && <Text style={styles.error}>{error}</Text>}
-
-        {empty && (
-          <View style={styles.empty}>
-            <Ionicons name="pie-chart-outline" size={40} color={xraySection.color} />
-            <Text style={styles.emptyTitle}>Add your portfolio</Text>
-            <Text style={styles.emptyText}>Export positions from your broker as CSV and paste them in, or add holdings one by one. Prices and charts update automatically.</Text>
+    <ScrollView contentContainerStyle={s.scroll} refreshControl={<RefreshControl refreshing={loading && !!xray} onRefresh={load} tintColor={c.primary} />}>
+      <PageHeader
+        eyebrow="Portfolio X-ray"
+        title={xray && !empty ? formatMoney(xray.total_value) : "Your portfolio"}
+        subtitle={xray && !empty ? null : "See concentration, sector exposure, chart health and upcoming earnings across everything you own."}
+        right={
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <Button title="Import" icon="cloud-upload-outline" variant="secondary" size="sm" onPress={() => setImportOpen(true)} />
+            <Button title="Add" icon="add" size="sm" onPress={() => setAddOpen(true)} />
           </View>
-        )}
+        }
+      />
+      {xray && !empty && (
+        <View style={s.dayRow}>
+          <View style={[s.change, { backgroundColor: c.soft(up ? c.gain : c.loss) }]}>
+            <Ionicons name={up ? "caret-up" : "caret-down"} size={12} color={up ? c.gain : c.loss} />
+            <Text style={[s.changeText, { color: up ? c.gain : c.loss }]}>{formatMoney(Math.abs(xray.day_change))} ({Math.abs(xray.day_change_pct)}%) today</Text>
+          </View>
+          {xray.unrealized_pl != null && (
+            <Text style={s.muted}>Unrealized {xray.unrealized_pl >= 0 ? "+" : "-"}{formatMoney(Math.abs(xray.unrealized_pl))} ({xray.unrealized_pl_pct}%)</Text>
+          )}
+        </View>
+      )}
 
-        {xray && !empty && (
-          <>
-            <SectionCard title="Risk at a glance" section={xraySection} right={a?.risk_level ? <Pill text={`${a.risk_level} risk`} color={RISK[a.risk_level]} /> : null}>
-              <View style={styles.tiles}>
-                <Tile label="Largest holding" value={`${xray.concentration.top_holding_pct}%`} />
-                <Tile label="Top 3" value={`${xray.concentration.top3_pct}%`} />
-                <Tile label="Acts like" value={`${xray.concentration.effective_holdings} stocks`} hint={xray.concentration.diversification} />
+      {loading && !xray && <Loading text="Pricing your holdings…" />}
+      {error && <Banner tone="error">{error}</Banner>}
+
+      {empty && (
+        <EmptyState
+          icon="pie-chart-outline"
+          title="Add your portfolio"
+          text="Export positions from your broker as CSV and paste them in, or add holdings one by one. Prices and charts update automatically."
+          action={<Button title="Import CSV" icon="cloud-upload-outline" onPress={() => setImportOpen(true)} />}
+        />
+      )}
+
+      {xray && !empty && (
+        <>
+          <SectionCard title="Allocation" section={sec} right={a?.risk_level ? <Pill text={`${a.risk_level} risk`} color={RISK[a.risk_level]} /> : null}>
+            <View style={s.allocation}>
+              <Donut sectors={xray.sectors} />
+              <View style={{ flex: 1, gap: 7 }}>
+                {xray.sectors.slice(0, 7).map((x, i) => (
+                  <View key={x.sector} style={s.legendRow}>
+                    <View style={[s.legendDot, { backgroundColor: c.hue(DONUT_HUES[i % DONUT_HUES.length]) }]} />
+                    <Text style={s.legendName} numberOfLines={1}>{x.sector}</Text>
+                    <Text style={s.legendPct}>{x.weight}%</Text>
+                  </View>
+                ))}
               </View>
-              <Text style={styles.subhead}>Sectors</Text>
-              {xray.sectors.map((s) => (
-                <View key={s.sector} style={styles.barRow}>
-                  <Text style={styles.barLabel} numberOfLines={1}>{s.sector}</Text>
-                  <View style={styles.barTrack}><View style={[styles.barFill, { width: `${s.weight}%`, backgroundColor: tickerColor(s.sector) }]} /></View>
-                  <Text style={styles.barValue}>{s.weight}%</Text>
-                </View>
+            </View>
+            <View style={[s.stats, { marginTop: 16 }]}>
+              <Stat label="Largest holding" value={`${xray.concentration.top_holding_pct}%`} />
+              <Stat label="Top 3" value={`${xray.concentration.top3_pct}%`} />
+              <Stat label="Acts like" value={`${xray.concentration.effective_holdings} stocks`} hint={xray.concentration.diversification} />
+            </View>
+          </SectionCard>
+
+          <SectionCard title="AI X-ray" section={{ ...sec, icon: "sparkles-outline" }}>
+            {a ? (
+              <>
+                <Text style={s.headline}>{a.headline}</Text>
+                <Text style={s.body}>{a.summary}</Text>
+                {[["Concentration", a.concentration], ["Sector exposure", a.sector_exposure], ["Chart health", a.technical_health], ["Coming up", a.upcoming]].map(([h, t]) => (
+                  <View key={h}>
+                    <Text style={s.subhead}>{h}</Text>
+                    <Text style={s.body}>{t}</Text>
+                  </View>
+                ))}
+                <Text style={s.subhead}>Things to watch</Text>
+                <Bullets items={a.things_to_watch} color={sec.color} />
+              </>
+            ) : analyzing ? (
+              <Loading text="Analyzing your portfolio…" />
+            ) : (
+              <Text style={s.muted}>{xray.analysis_error ?? "AI analysis unavailable right now. Pull to refresh."}</Text>
+            )}
+          </SectionCard>
+
+          {xray.upcoming_earnings?.length > 0 && (
+            <SectionCard title="Earnings in the next 30 days" section={sections.events}>
+              {xray.upcoming_earnings.map((e) => (
+                <Pressable key={e.ticker + e.date} style={s.earningRow} onPress={() => onOpenStock(e.ticker)}>
+                  <TickerAvatar ticker={e.ticker} size={34} />
+                  <Text style={[s.body, { flex: 1 }]}>{new Date(`${e.date}T12:00:00Z`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</Text>
+                  <Text style={s.muted}>{e.hour === "bmo" ? "Before open" : e.hour === "amc" ? "After close" : ""}</Text>
+                </Pressable>
               ))}
             </SectionCard>
+          )}
 
-            <SectionCard title="AI X-ray" section={{ ...xraySection, icon: "sparkles-outline" }}>
-              {a ? (
-                <>
-                  <Text style={styles.headline}>{a.headline}</Text>
-                  <Text style={styles.body}>{a.summary}</Text>
-                  <Text style={styles.subhead}>Concentration</Text>
-                  <Text style={styles.body}>{a.concentration}</Text>
-                  <Text style={styles.subhead}>Sector exposure</Text>
-                  <Text style={styles.body}>{a.sector_exposure}</Text>
-                  <Text style={styles.subhead}>Chart health</Text>
-                  <Text style={styles.body}>{a.technical_health}</Text>
-                  <Text style={styles.subhead}>Coming up</Text>
-                  <Text style={styles.body}>{a.upcoming}</Text>
-                  <Text style={styles.subhead}>Things to watch</Text>
-                  <Bullets items={a.things_to_watch} color={xraySection.color} />
-                </>
-              ) : analyzing ? (
-                <View style={styles.inline}><ActivityIndicator color={xraySection.color} /><Text style={styles.muted}>Analyzing your portfolio…</Text></View>
-              ) : (
-                <Text style={styles.muted}>{xray.analysis_error ?? "AI analysis unavailable right now. Pull to refresh."}</Text>
-              )}
-            </SectionCard>
-
-            {xray.upcoming_earnings?.length > 0 && (
-              <SectionCard title="Earnings in the next 30 days" section={{ color: "#DB2777", soft: "#FCE7F3", icon: "calendar-outline" }}>
-                {xray.upcoming_earnings.map((e) => (
-                  <Pressable key={e.ticker + e.date} style={styles.earningRow} onPress={() => onOpenStock(e.ticker)}>
-                    <Text style={styles.earningTicker}>{e.ticker}</Text>
-                    <Text style={styles.body}>{e.date}{e.hour === "bmo" ? " · before open" : e.hour === "amc" ? " · after close" : ""}</Text>
-                  </Pressable>
-                ))}
-              </SectionCard>
-            )}
-
-            <Text style={styles.sectionTitle}>Holdings</Text>
-            {xray.positions.map((p) => (
-              <Pressable key={p.id} style={({ pressed }) => [styles.holding, pressed && { opacity: 0.85 }]} onPress={() => onOpenStock(p.ticker)}>
-                <TickerAvatar ticker={p.ticker} size={42} />
-                <View style={{ flex: 1 }}>
-                  <View style={styles.holdingTop}>
-                    <Text style={styles.holdingName} numberOfLines={1}>{p.ticker}</Text>
-                    <Text style={styles.holdingValue}>{formatMoney(p.value)}</Text>
-                  </View>
-                  <View style={styles.holdingTop}>
-                    <Text style={styles.muted}>{p.shares} sh · {p.weight}%</Text>
-                    <Text style={{ color: (p.change_pct ?? 0) >= 0 ? colors.green : colors.red, fontWeight: "700", fontSize: 13 }}>{p.change_pct >= 0 ? "+" : ""}{p.change_pct}%</Text>
-                  </View>
-                  <View style={styles.tags}>
-                    {p.pl_pct != null && <Pill text={`P/L ${p.pl_pct >= 0 ? "+" : ""}${p.pl_pct}%`} color={p.pl_pct >= 0 ? colors.green : colors.red} />}
-                    {p.technicals?.trend && <Pill text={p.technicals.trend} color={p.technicals.trend === "uptrend" ? colors.green : p.technicals.trend === "downtrend" ? colors.red : colors.muted} />}
-                    {p.technicals?.rsi14 != null && (p.technicals.rsi14 >= 70 || p.technicals.rsi14 <= 30) && <Pill text={`RSI ${p.technicals.rsi14}`} color={colors.amber} />}
-                  </View>
+          <Text style={s.sectionTitle}>Holdings</Text>
+          {xray.positions.map((p) => (
+            <Pressable key={p.id} style={({ hovered, pressed }) => [s.holding, hovered && { borderColor: c.borderStrong }, pressed && { opacity: 0.85 }]} onPress={() => onOpenStock(p.ticker)}>
+              <TickerAvatar ticker={p.ticker} size={44} />
+              <View style={{ flex: 1 }}>
+                <View style={s.holdingTop}>
+                  <Text style={s.holdingName} numberOfLines={1}>{p.ticker}</Text>
+                  <Text style={s.holdingValue}>{formatMoney(p.value)}</Text>
                 </View>
-                <Pressable onPress={() => remove(p.id)} hitSlop={10} accessibilityLabel={`Remove ${p.ticker}`}>
-                  <Ionicons name="trash-outline" size={18} color={colors.muted} />
-                </Pressable>
+                <View style={s.holdingTop}>
+                  <Text style={s.muted}>{p.shares} sh · {p.weight}%</Text>
+                  <Text style={{ color: (p.change_pct ?? 0) >= 0 ? c.gain : c.loss, fontWeight: "700", fontSize: 13 }}>{p.change_pct >= 0 ? "+" : ""}{p.change_pct}%</Text>
+                </View>
+                <View style={s.weightTrack}><View style={[s.weightFill, { width: `${Math.min(100, p.weight)}%` }]} /></View>
+                <View style={s.tags}>
+                  {p.pl_pct != null && <Pill text={`P/L ${p.pl_pct >= 0 ? "+" : ""}${p.pl_pct}%`} color={p.pl_pct >= 0 ? c.gain : c.loss} />}
+                  {p.technicals?.trend && <Pill text={p.technicals.trend} color={p.technicals.trend === "uptrend" ? c.gain : p.technicals.trend === "downtrend" ? c.loss : c.muted} />}
+                  {p.technicals?.rsi14 != null && (p.technicals.rsi14 >= 70 || p.technicals.rsi14 <= 30) && <Pill text={`RSI ${p.technicals.rsi14}`} color={c.warn} />}
+                </View>
+              </View>
+              <Pressable onPress={() => remove(p.id)} hitSlop={10} accessibilityLabel={`Remove ${p.ticker}`} style={s.remove}>
+                <Ionicons name="trash-outline" size={17} color={c.muted} />
               </Pressable>
-            ))}
-            {xray.unpriced?.length > 0 && <Text style={styles.muted}>No price found for: {xray.unpriced.join(", ")}</Text>}
-            <Text style={styles.disclaimer}>Educational analysis, not investment advice. Holdings stay private to your account.</Text>
-          </>
-        )}
-      </View>
+            </Pressable>
+          ))}
+          {xray.unpriced?.length > 0 && <Text style={[s.muted, { marginTop: 10 }]}>No price found for: {xray.unpriced.join(", ")}</Text>}
+          <Disclaimer>Educational analysis, not investment advice. Holdings stay private to your account.</Disclaimer>
+        </>
+      )}
 
       <ImportModal visible={importOpen} onClose={() => setImportOpen(false)} onDone={load} />
       <AddModal visible={addOpen} onClose={() => setAddOpen(false)} onDone={load} />
@@ -177,32 +183,54 @@ export default function PortfolioScreen({ onOpenStock }) {
   );
 }
 
-function Tile({ label, value, hint }) {
+/** Sector allocation donut (SVG arcs drawn with stroke dash offsets). */
+function Donut({ sectors, size = 132 }) {
+  const { c } = useTheme();
+  const stroke = 18;
+  const r = (size - stroke) / 2;
+  const circ = 2 * Math.PI * r;
+  let offset = 0;
   return (
-    <View style={styles.tile}>
-      <Text style={styles.tileLabel}>{label}</Text>
-      <Text style={styles.tileValue}>{value}</Text>
-      {hint ? <Text style={styles.tileHint}>{hint}</Text> : null}
+    <View style={{ width: size, height: size }}>
+      <Svg width={size} height={size} style={{ transform: [{ rotate: "-90deg" }] }}>
+        <Circle cx={size / 2} cy={size / 2} r={r} stroke={c.surfaceAlt} strokeWidth={stroke} fill="none" />
+        {sectors.map((x, i) => {
+          const len = (x.weight / 100) * circ;
+          const el = <Circle key={x.sector} cx={size / 2} cy={size / 2} r={r} stroke={c.hue(DONUT_HUES[i % DONUT_HUES.length])} strokeWidth={stroke} fill="none" strokeDasharray={`${Math.max(0, len - 2)} ${circ}`} strokeDashoffset={-offset} strokeLinecap="butt" />;
+          offset += len;
+          return el;
+        })}
+      </Svg>
+      <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}>
+        <Text style={{ color: c.text, fontSize: 20, fontWeight: "800" }}>{sectors.length}</Text>
+        <Text style={{ color: c.muted, fontSize: 11 }}>sectors</Text>
+      </View>
     </View>
   );
 }
 
 function Sheet({ visible, onClose, title, children }) {
+  const { c } = useTheme();
+  const s = useStyles();
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} />
-      <View style={styles.sheet}>
-        <View style={styles.sheetHeader}>
-          <Text style={styles.sheetTitle}>{title}</Text>
-          <Pressable onPress={onClose} accessibilityLabel="Close"><Ionicons name="close" size={24} color={colors.muted} /></Pressable>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={s.sheetWrap}>
+        <Pressable style={s.backdrop} onPress={onClose} accessibilityLabel="Close" />
+        <View style={s.sheet}>
+          <View style={s.sheetHeader}>
+            <Text style={s.sheetTitle}>{title}</Text>
+            <Pressable onPress={onClose} accessibilityLabel="Close" style={s.close}><Ionicons name="close" size={20} color={c.textSecondary} /></Pressable>
+          </View>
+          {children}
         </View>
-        {children}
       </View>
     </Modal>
   );
 }
 
 function ImportModal({ visible, onClose, onDone }) {
+  const { c } = useTheme();
+  const s = useStyles();
   const [csv, setCsv] = useState("");
   const [replace, setReplace] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -212,11 +240,10 @@ function ImportModal({ visible, onClose, onDone }) {
     setBusy(true);
     setMsg(null);
     try {
-      const r = await api.importCsv(csv, replace ? "replace" : "merge");
+      await api.importCsv(csv, replace ? "replace" : "merge");
       setCsv("");
       onDone();
       onClose();
-      if (r.skipped?.length) console.warn("Skipped rows:", r.skipped);
     } catch (e) {
       setMsg(e.message);
     }
@@ -225,19 +252,20 @@ function ImportModal({ visible, onClose, onDone }) {
 
   return (
     <Sheet visible={visible} onClose={onClose} title="Import from CSV">
-      <Text style={styles.muted}>Paste your broker's positions export. Columns like Symbol, Quantity and Average Cost are detected automatically; simple lines like "AAPL,10,150" work too.</Text>
-      <TextInput style={styles.csvInput} multiline value={csv} onChangeText={setCsv} placeholder={CSV_EXAMPLE} placeholderTextColor={colors.muted} autoCapitalize="characters" autoCorrect={false} />
-      <Pressable style={styles.checkRow} onPress={() => setReplace(!replace)}>
-        <Ionicons name={replace ? "checkbox" : "square-outline"} size={20} color={colors.primary} />
-        <Text style={styles.body}>Replace my current holdings</Text>
+      <Text style={s.muted}>Paste your broker's positions export. Columns like Symbol, Quantity and Average Cost are detected automatically; simple lines like "AAPL,10,150" work too.</Text>
+      <TextInput style={s.csvInput} multiline value={csv} onChangeText={setCsv} placeholder={CSV_EXAMPLE} placeholderTextColor={c.muted} autoCapitalize="characters" autoCorrect={false} />
+      <Pressable style={s.checkRow} onPress={() => setReplace(!replace)}>
+        <Ionicons name={replace ? "checkbox" : "square-outline"} size={20} color={c.primary} />
+        <Text style={s.body}>Replace my current holdings</Text>
       </Pressable>
-      {msg && <Text style={styles.error}>{msg}</Text>}
-      <PrimaryButton title="Import" icon="cloud-upload-outline" onPress={submit} loading={busy} disabled={!csv.trim()} style={{ marginTop: 12 }} />
+      {msg && <Banner tone="error">{msg}</Banner>}
+      <Button title="Import" icon="cloud-upload-outline" onPress={submit} loading={busy} disabled={!csv.trim()} size="lg" style={{ marginTop: 14 }} />
     </Sheet>
   );
 }
 
 function AddModal({ visible, onClose, onDone }) {
+  const s = useStyles();
   const [ticker, setTicker] = useState("");
   const [shares, setShares] = useState("");
   const [cost, setCost] = useState("");
@@ -262,62 +290,51 @@ function AddModal({ visible, onClose, onDone }) {
 
   return (
     <Sheet visible={visible} onClose={onClose} title="Add a holding">
-      <Text style={styles.label}>Ticker</Text>
-      <TextInput style={styles.field} value={ticker} onChangeText={setTicker} placeholder="AAPL" placeholderTextColor={colors.muted} autoCapitalize="characters" autoCorrect={false} />
-      <Text style={styles.label}>Shares</Text>
-      <TextInput style={styles.field} value={shares} onChangeText={setShares} placeholder="10" placeholderTextColor={colors.muted} keyboardType="decimal-pad" />
-      <Text style={styles.label}>Average cost per share (optional)</Text>
-      <TextInput style={styles.field} value={cost} onChangeText={setCost} placeholder="150.00" placeholderTextColor={colors.muted} keyboardType="decimal-pad" />
-      {msg && <Text style={styles.error}>{msg}</Text>}
-      <PrimaryButton title="Add holding" icon="add" onPress={submit} loading={busy} style={{ marginTop: 14 }} />
+      <Text style={s.label}>Ticker</Text>
+      <Input value={ticker} onChangeText={setTicker} placeholder="AAPL" autoCapitalize="characters" autoCorrect={false} />
+      <Text style={s.label}>Shares</Text>
+      <Input value={shares} onChangeText={setShares} placeholder="10" keyboardType="decimal-pad" />
+      <Text style={s.label}>Average cost per share (optional)</Text>
+      <Input value={cost} onChangeText={setCost} placeholder="150.00" keyboardType="decimal-pad" />
+      {msg && <Banner tone="error">{msg}</Banner>}
+      <Button title="Add holding" icon="add" onPress={submit} loading={busy} size="lg" style={{ marginTop: 16 }} />
     </Sheet>
   );
 }
 
-const styles = StyleSheet.create({
-  hero: { backgroundColor: "#7C3AED", padding: 20, paddingBottom: 24, borderBottomLeftRadius: 28, borderBottomRightRadius: 28, marginBottom: 6 },
-  heroLabel: { color: "#E9D5FF", fontWeight: "700", fontSize: 14 },
-  total: { color: colors.white, fontSize: 34, fontWeight: "800", marginTop: 6 },
-  dayChange: { fontWeight: "800", fontSize: 15, marginTop: 2 },
-  heroSub: { color: "#F3E8FF", fontSize: 14, marginTop: 6, lineHeight: 20 },
-  heroActions: { flexDirection: "row", gap: 10, marginTop: 16 },
-  heroButton: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.18)", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 },
-  heroButtonText: { color: colors.white, fontWeight: "700" },
-  error: { color: colors.red, marginTop: 10 },
-  empty: { alignItems: "center", padding: 28, backgroundColor: colors.card, borderRadius: 20, marginTop: 14 },
-  emptyTitle: { fontWeight: "800", fontSize: 18, color: colors.text, marginTop: 10 },
-  emptyText: { color: colors.muted, textAlign: "center", marginTop: 6, lineHeight: 20 },
-  tiles: { flexDirection: "row", gap: 8 },
-  tile: { flex: 1, backgroundColor: colors.bg, borderRadius: 12, padding: 10 },
-  tileLabel: { color: colors.muted, fontSize: 11 },
-  tileValue: { color: colors.text, fontSize: 17, fontWeight: "800", marginTop: 2 },
-  tileHint: { color: xraySection.color, fontSize: 11, fontWeight: "700", textTransform: "capitalize" },
-  subhead: { fontWeight: "800", color: colors.text, marginTop: 12, marginBottom: 4 },
-  barRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6 },
-  barLabel: { width: 100, color: colors.text, fontSize: 13 },
-  barTrack: { flex: 1, height: 10, backgroundColor: colors.border, borderRadius: 5, overflow: "hidden" },
-  barFill: { height: 10, borderRadius: 5 },
-  barValue: { width: 46, textAlign: "right", fontWeight: "700", color: colors.text, fontSize: 13 },
-  headline: { fontWeight: "800", fontSize: 16, color: colors.text, marginBottom: 6 },
-  body: { color: colors.text, fontSize: 14, lineHeight: 21 },
-  muted: { color: colors.muted, fontSize: 13, lineHeight: 19 },
-  inline: { flexDirection: "row", gap: 10, alignItems: "center" },
-  earningRow: { flexDirection: "row", gap: 12, alignItems: "center", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
-  earningTicker: { fontWeight: "800", color: "#DB2777", width: 56 },
-  sectionTitle: { fontWeight: "800", fontSize: 18, color: colors.text, marginTop: 22, marginBottom: 4 },
-  holding: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.card, borderRadius: 18, padding: 12, marginTop: 10 },
-  holdingTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  holdingName: { fontWeight: "800", color: colors.text, fontSize: 15 },
-  holdingValue: { fontWeight: "800", color: colors.text },
-  tags: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 },
-  disclaimer: { color: colors.muted, fontSize: 11, marginTop: 20, textAlign: "center" },
-  backdrop: { flex: 1, backgroundColor: "rgba(15,23,42,0.45)" },
-  sheet: { backgroundColor: colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 30 },
-  sheetHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
-  sheetTitle: { fontSize: 18, fontWeight: "800", color: colors.text },
+const useStyles = makeStyles((c) => ({
+  scroll: { padding: 16, paddingBottom: 60 },
+  dayRow: { flexDirection: "row", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: -6, marginBottom: 4 },
+  change: { flexDirection: "row", alignItems: "center", gap: 3, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
+  changeText: { fontWeight: "800", fontVariant: ["tabular-nums"] },
+  muted: { color: c.textSecondary, fontSize: 13, lineHeight: 19 },
+  body: { color: c.text, fontSize: 14, lineHeight: 21 },
+  headline: { fontWeight: "800", fontSize: 16, color: c.text, marginBottom: 6 },
+  subhead: { fontWeight: "700", color: c.text, marginTop: 14, marginBottom: 4, fontSize: 13 },
+  allocation: { flexDirection: "row", alignItems: "center", gap: 20 },
+  legendRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  legendDot: { width: 10, height: 10, borderRadius: 3 },
+  legendName: { flex: 1, color: c.text, fontSize: 13 },
+  legendPct: { color: c.textSecondary, fontWeight: "700", fontSize: 13, fontVariant: ["tabular-nums"] },
+  stats: { flexDirection: "row", gap: 8 },
+  earningRow: { flexDirection: "row", gap: 12, alignItems: "center", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: c.border },
+  sectionTitle: { fontWeight: "800", fontSize: 18, color: c.text, marginTop: 24, marginBottom: 2, letterSpacing: -0.2 },
+  holding: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: c.surface, borderRadius: 20, borderWidth: 1, borderColor: c.border, padding: 14, marginTop: 10 },
+  holdingTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
+  holdingName: { fontWeight: "800", color: c.text, fontSize: 15 },
+  holdingValue: { fontWeight: "800", color: c.text, fontVariant: ["tabular-nums"] },
+  weightTrack: { height: 4, borderRadius: 2, backgroundColor: c.surfaceAlt, marginTop: 8, overflow: "hidden" },
+  weightFill: { height: 4, borderRadius: 2, backgroundColor: c.primary },
+  tags: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },
+  remove: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  sheetWrap: { flex: 1, justifyContent: "flex-end", alignItems: "center" },
+  backdrop: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: c.overlay },
+  sheet: { width: "100%", maxWidth: 560, backgroundColor: c.elevated, borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 22, paddingBottom: 32, borderWidth: 1, borderColor: c.border },
+  sheetHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
+  sheetTitle: { fontSize: 20, fontWeight: "800", color: c.text },
+  close: { width: 34, height: 34, borderRadius: 17, backgroundColor: c.surfaceAlt, alignItems: "center", justifyContent: "center" },
   // iOS has no "monospace" family (it errors in dev), so use Menlo there
-  csvInput: { borderWidth: 1.5, borderColor: colors.border, borderRadius: 12, padding: 12, minHeight: 140, marginTop: 10, fontSize: 14, color: colors.text, textAlignVertical: "top", fontFamily: Platform.select({ ios: "Menlo", default: "monospace" }) },
-  checkRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10 },
-  label: { fontWeight: "700", color: colors.text, marginTop: 12, marginBottom: 6 },
-  field: { borderWidth: 1.5, borderColor: colors.border, borderRadius: 12, padding: 12, fontSize: 16, color: colors.text },
-});
+  csvInput: { borderWidth: 1, borderColor: c.border, backgroundColor: c.surfaceAlt, borderRadius: 14, padding: 12, minHeight: 140, marginTop: 12, fontSize: 14, color: c.text, textAlignVertical: "top", fontFamily: Platform.select({ ios: "Menlo", default: "monospace" }) },
+  checkRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12 },
+  label: { fontWeight: "600", color: c.text, marginTop: 14, marginBottom: 8, fontSize: 14 },
+}));

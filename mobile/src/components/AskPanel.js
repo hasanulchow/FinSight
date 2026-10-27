@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../lib/api";
-import { colors } from "../theme";
-import { SectionCard } from "./ui";
+import { makeStyles, useTheme } from "../theme";
+import { Chip, SectionCard } from "./ui";
 
-const askSection = { color: "#4F46E5", soft: "#EEF2FF", icon: "chatbubble-ellipses-outline" };
 const SUGGESTIONS = ["What are the biggest risks?", "How does it make money?", "What did management say about the outlook?"];
 
 /** "Ask the 10-K": follow-up questions answered from the filing, with citations. Remembers the conversation. */
 export default function AskPanel({ briefingId }) {
+  const { c, sections } = useTheme();
+  const s = useStyles();
   const [messages, setMessages] = useState([]);
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
@@ -39,83 +40,75 @@ export default function AskPanel({ briefingId }) {
   }
 
   return (
-    <SectionCard title="Ask the 10-K" section={askSection}>
-      <Text style={styles.muted}>Answers come only from the company's latest annual report, with citations.</Text>
-
+    <SectionCard title="Ask the 10-K" subtitle="Answers cite the company's latest annual report" section={sections.ask}>
       {messages.length === 0 && (
-        <View style={styles.suggestions}>
-          {SUGGESTIONS.map((s) => (
-            <Pressable key={s} style={styles.suggestion} onPress={() => send(s)} disabled={busy}>
-              <Text style={styles.suggestionText}>{s}</Text>
-            </Pressable>
-          ))}
+        <View style={s.suggestions}>
+          {SUGGESTIONS.map((q) => <Chip key={q} label={q} icon="sparkles-outline" onPress={() => send(q)} />)}
         </View>
       )}
 
       {messages.map((m) => (
-        <View key={m.id} style={[styles.bubble, m.role === "user" ? styles.userBubble : styles.aiBubble]}>
-          <Text style={m.role === "user" ? styles.userText : styles.aiText}>{m.content}</Text>
+        <View key={m.id} style={[s.bubble, m.role === "user" ? s.userBubble : s.aiBubble]}>
+          <Text style={m.role === "user" ? s.userText : s.aiText}>{m.content}</Text>
           {m.citations?.length > 0 && (
-            <View style={styles.citations}>
-              {m.citations.map((c) => {
-                const key = `${m.id}-${c.n}`;
+            <View style={s.citations}>
+              {m.citations.map((cit) => {
+                const key = `${m.id}-${cit.n}`;
                 return (
                   <Pressable key={key} onPress={() => setOpenCitation(openCitation === key ? null : key)}>
-                    <Text style={styles.citation}>[{c.n}] {c.section}</Text>
-                    {openCitation === key && <Text style={styles.excerpt}>“{c.excerpt}…”</Text>}
+                    <Text style={s.citation}>[{cit.n}] {cit.section}</Text>
+                    {openCitation === key && <Text style={s.excerpt}>“{cit.excerpt}…”</Text>}
                   </Pressable>
                 );
               })}
             </View>
           )}
-          {m.evaluation && <Text style={styles.score}>Answer quality {m.evaluation.overall}/5</Text>}
+          {m.evaluation && <Text style={s.score}>Answer quality {m.evaluation.overall}/5</Text>}
         </View>
       ))}
 
       {busy && (
-        <View style={styles.thinking}>
-          <ActivityIndicator color={askSection.color} size="small" />
-          <Text style={styles.muted}>Searching the filing…</Text>
+        <View style={s.thinking}>
+          <ActivityIndicator color={c.primary} size="small" />
+          <Text style={s.muted}>Searching the filing…</Text>
         </View>
       )}
-      {error && <Text style={styles.error}>{error}</Text>}
+      {error && <Text style={s.error}>{error}</Text>}
 
-      <View style={styles.inputRow}>
+      <View style={s.inputRow}>
         <TextInput
-          style={styles.input}
+          style={s.input}
           placeholder="Ask about risks, segments, guidance…"
-          placeholderTextColor={colors.muted}
+          placeholderTextColor={c.muted}
           value={question}
           onChangeText={setQuestion}
           onSubmitEditing={() => send()}
           returnKeyType="send"
           editable={!busy}
         />
-        <Pressable style={[styles.send, (!question.trim() || busy) && { opacity: 0.4 }]} onPress={() => send()} disabled={!question.trim() || busy} accessibilityLabel="Send question">
-          <Ionicons name="arrow-up" size={20} color={colors.white} />
+        <Pressable style={[s.send, (!question.trim() || busy) && { opacity: 0.35 }]} onPress={() => send()} disabled={!question.trim() || busy} accessibilityLabel="Send question">
+          <Ionicons name="arrow-up" size={19} color={c.onPrimary} />
         </Pressable>
       </View>
     </SectionCard>
   );
 }
 
-const styles = StyleSheet.create({
-  muted: { color: colors.muted, fontSize: 13 },
-  suggestions: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
-  suggestion: { backgroundColor: colors.primarySoft, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },
-  suggestionText: { color: colors.primary, fontWeight: "600", fontSize: 13 },
-  bubble: { borderRadius: 16, padding: 12, marginTop: 10, maxWidth: "92%" },
-  userBubble: { backgroundColor: colors.primary, alignSelf: "flex-end", borderBottomRightRadius: 4 },
-  aiBubble: { backgroundColor: colors.bg, alignSelf: "flex-start", borderBottomLeftRadius: 4 },
-  userText: { color: colors.white, fontSize: 14, lineHeight: 20 },
-  aiText: { color: colors.text, fontSize: 14, lineHeight: 21 },
+const useStyles = makeStyles((c) => ({
+  muted: { color: c.muted, fontSize: 13 },
+  suggestions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  bubble: { borderRadius: 18, padding: 13, marginTop: 10, maxWidth: "92%" },
+  userBubble: { backgroundColor: c.primary, alignSelf: "flex-end", borderBottomRightRadius: 6 },
+  aiBubble: { backgroundColor: c.surfaceAlt, alignSelf: "flex-start", borderBottomLeftRadius: 6 },
+  userText: { color: c.onPrimary, fontSize: 14, lineHeight: 20 },
+  aiText: { color: c.text, fontSize: 14, lineHeight: 21 },
   citations: { marginTop: 8, gap: 4 },
-  citation: { color: colors.primary, fontSize: 12, fontWeight: "700" },
-  excerpt: { color: colors.muted, fontSize: 12, fontStyle: "italic", marginTop: 2, lineHeight: 17 },
-  score: { color: colors.muted, fontSize: 11, marginTop: 6 },
-  thinking: { flexDirection: "row", gap: 8, alignItems: "center", marginTop: 10 },
-  error: { color: colors.red, marginTop: 8 },
-  inputRow: { flexDirection: "row", gap: 8, marginTop: 12, alignItems: "center" },
-  input: { flex: 1, borderWidth: 1.5, borderColor: colors.border, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 11, fontSize: 15, color: colors.text },
-  send: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
-});
+  citation: { color: c.primary, fontSize: 12, fontWeight: "700" },
+  excerpt: { color: c.textSecondary, fontSize: 12, fontStyle: "italic", marginTop: 2, lineHeight: 17 },
+  score: { color: c.muted, fontSize: 11, marginTop: 6 },
+  thinking: { flexDirection: "row", gap: 8, alignItems: "center", marginTop: 12 },
+  error: { color: c.loss, marginTop: 8 },
+  inputRow: { flexDirection: "row", gap: 8, marginTop: 14, alignItems: "center", backgroundColor: c.surfaceAlt, borderRadius: 16, borderWidth: 1, borderColor: c.border, paddingLeft: 14, padding: 4 },
+  input: { flex: 1, paddingVertical: 10, fontSize: 15, color: c.text, outlineStyle: "none" },
+  send: { width: 40, height: 40, borderRadius: 12, backgroundColor: c.primary, alignItems: "center", justifyContent: "center" },
+}));

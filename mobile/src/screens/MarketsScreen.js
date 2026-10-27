@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../lib/api";
-import { colors } from "../theme";
-import { SectionCard } from "../components/ui";
-import Heatmap, { changeColor } from "../components/Heatmap";
+import { makeStyles, useTheme } from "../theme";
+import { Banner, Input, Loading, PageHeader, SectionCard, Segmented } from "../components/ui";
+import Heatmap, { changeColor, changeTextColor } from "../components/Heatmap";
 import LineChart from "../components/LineChart";
 
-const MK = { color: "#2563EB", soft: "#DBEAFE", icon: "globe-outline" };
 const pct = (v) => (v == null ? "–" : `${v > 0 ? "+" : ""}${v}%`);
-const up = (v) => (v ?? 0) >= 0;
 
 /** Markets tab: indices, sector performance, breadth, heatmap, top movers and a comparison chart. */
 export default function MarketsScreen({ onOpenStock }) {
+  const { c, sections } = useTheme();
+  const s = useStyles();
+  const { width } = useWindowDimensions();
+  const sec = sections.markets;
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -50,153 +52,149 @@ export default function MarketsScreen({ onOpenStock }) {
 
   const b = data?.breadth;
   const list = data ? data[movers === "active" ? "most_active" : movers] : [];
+  const colorOf = (v) => ((v ?? 0) >= 0 ? c.gain : c.loss);
+  const maxSector = data ? Math.max(...data.sectors.map((x) => Math.abs(x.change_pct)), 0.5) : 1;
 
   return (
-    <ScrollView contentContainerStyle={{ paddingBottom: 60 }} refreshControl={<RefreshControl refreshing={refreshing && !!data} onRefresh={load} tintColor={MK.color} />}>
-      <View style={styles.hero}>
-        <Text style={styles.heroTitle}>Markets</Text>
-        <Text style={styles.heroSub}>{data ? `Session ${data.session} vs ${data.previous_session} (end of day)` : "US market snapshot"}</Text>
-        {data && (
-          <View style={styles.indices}>
+    <ScrollView contentContainerStyle={s.scroll} refreshControl={<RefreshControl refreshing={refreshing && !!data} onRefresh={load} tintColor={c.primary} />}>
+      <PageHeader eyebrow="Markets" title="Today's market" subtitle={data ? `End of day ${new Date(`${data.session}T12:00:00Z`).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })} vs previous session` : "US stocks, sectors and movers"} />
+
+      {!data && !error && <Loading text="Loading the market snapshot… the first load can take about 30 seconds." />}
+      {error && <Banner tone="error">{error}</Banner>}
+
+      {data && (
+        <>
+          <View style={[s.indices, width < 520 && { flexWrap: "wrap" }]}>
             {data.indices.map((i) => (
-              <Pressable key={i.ticker} style={styles.index} onPress={() => onOpenStock(i.ticker)}>
-                <Text style={styles.indexName} numberOfLines={1}>{i.name}</Text>
-                <Text style={styles.indexPrice}>${i.close}</Text>
-                <Text style={[styles.indexChange, { color: up(i.change_pct) ? "#A7F3D0" : "#FECACA" }]}>{pct(i.change_pct)}</Text>
+              <Pressable key={i.ticker} style={({ hovered }) => [s.index, width < 520 && { flexBasis: "47%" }, hovered && { borderColor: c.borderStrong }]} onPress={() => onOpenStock(i.ticker)}>
+                <Text style={s.indexName} numberOfLines={1}>{i.name}</Text>
+                <Text style={s.indexPrice}>${i.close}</Text>
+                <View style={s.indexRow}>
+                  <Ionicons name={(i.change_pct ?? 0) >= 0 ? "caret-up" : "caret-down"} size={12} color={colorOf(i.change_pct)} />
+                  <Text style={[s.indexChange, { color: colorOf(i.change_pct) }]}>{Math.abs(i.change_pct)}%</Text>
+                  <Text style={s.indexTicker}>{i.ticker}</Text>
+                </View>
               </Pressable>
             ))}
           </View>
-        )}
-      </View>
 
-      <View style={{ paddingHorizontal: 16 }}>
-        {!data && !error && (
-          <View style={styles.loading}>
-            <ActivityIndicator color={MK.color} />
-            <Text style={styles.muted}>Loading the market snapshot…</Text>
-          </View>
-        )}
-        {error && <Text style={styles.error}>{error}</Text>}
+          <SectionCard title="Breadth" subtitle={`${b.total.toLocaleString()} US stocks with volume`} section={{ ...sec, icon: "pulse-outline" }}>
+            <View style={s.breadthBar}>
+              <View style={{ flex: b.advancers, backgroundColor: c.gain }} />
+              <View style={{ flex: Math.max(b.unchanged, 1), backgroundColor: c.borderStrong }} />
+              <View style={{ flex: b.decliners, backgroundColor: c.loss }} />
+            </View>
+            <View style={s.breadthLabels}>
+              <Text style={[s.breadthText, { color: c.gain }]}>{b.advancers.toLocaleString()} up · {Math.round((b.advancers / b.total) * 100)}%</Text>
+              <Text style={[s.breadthText, { color: c.loss }]}>{b.decliners.toLocaleString()} down</Text>
+            </View>
+          </SectionCard>
 
-        {data && (
-          <>
-            <SectionCard title="Breadth" section={{ ...MK, icon: "pulse-outline" }}>
-              <View style={styles.breadthBar}>
-                <View style={{ flex: b.advancers, backgroundColor: colors.green }} />
-                <View style={{ flex: b.unchanged, backgroundColor: colors.border }} />
-                <View style={{ flex: b.decliners, backgroundColor: colors.red }} />
-              </View>
-              <View style={styles.breadthLabels}>
-                <Text style={[styles.breadthText, { color: colors.green }]}>{b.advancers.toLocaleString()} up</Text>
-                <Text style={[styles.breadthText, { color: colors.red }]}>{b.decliners.toLocaleString()} down</Text>
-              </View>
-              <Text style={styles.small}>{Math.round((b.advancers / b.total) * 100)}% of {b.total.toLocaleString()} US stocks rose.</Text>
-            </SectionCard>
+          <SectionCard title="Sectors" subtitle="SPDR sector ETFs" section={{ ...sec, icon: "grid-outline" }}>
+            {data.sectors.map((x) => {
+              const w = (Math.abs(x.change_pct) / maxSector) * 50;
+              return (
+                <Pressable key={x.ticker} style={({ hovered }) => [s.sectorRow, hovered && { backgroundColor: c.surfaceAlt }]} onPress={() => onOpenStock(x.ticker)}>
+                  <Text style={s.sectorName} numberOfLines={1}>{x.name}</Text>
+                  <View style={s.sectorTrack}>
+                    <View style={s.sectorMid} />
+                    <View style={[s.sectorFill, (x.change_pct ?? 0) >= 0 ? { left: "50%", width: `${w}%`, backgroundColor: c.gain } : { right: "50%", width: `${w}%`, backgroundColor: c.loss }]} />
+                  </View>
+                  <Text style={[s.sectorPct, { color: colorOf(x.change_pct) }]}>{pct(x.change_pct)}</Text>
+                </Pressable>
+              );
+            })}
+          </SectionCard>
 
-            <SectionCard title="Sectors" section={{ ...MK, icon: "grid-outline" }}>
-              {data.sectors.map((s) => {
-                const width = Math.min(100, (Math.abs(s.change_pct) / Math.max(...data.sectors.map((x) => Math.abs(x.change_pct)), 0.5)) * 100);
-                return (
-                  <Pressable key={s.ticker} style={styles.sectorRow} onPress={() => onOpenStock(s.ticker)}>
-                    <Text style={styles.sectorName} numberOfLines={1}>{s.name}</Text>
-                    <View style={styles.sectorTrack}>
-                      <View style={styles.sectorMid} />
-                      <View style={[styles.sectorFill, up(s.change_pct) ? { left: "50%", width: `${width / 2}%`, backgroundColor: colors.green } : { right: "50%", width: `${width / 2}%`, backgroundColor: colors.red }]} />
-                    </View>
-                    <Text style={[styles.sectorPct, { color: up(s.change_pct) ? colors.green : colors.red }]}>{pct(s.change_pct)}</Text>
-                  </Pressable>
-                );
-              })}
-            </SectionCard>
+          <SectionCard title="Heatmap" subtitle="About 100 large caps, sized by market cap" section={{ ...sec, icon: "apps-outline" }}>
+            <Heatmap tiles={data.heatmap} onPress={onOpenStock} />
+          </SectionCard>
 
-            <SectionCard title="Heatmap" section={{ ...MK, icon: "apps-outline" }}>
-              <Heatmap tiles={data.heatmap} onPress={onOpenStock} />
-              <Text style={styles.small}>~100 large caps, sized by market cap. Tap a tile to open the stock.</Text>
-            </SectionCard>
-
-            <SectionCard title="Top movers" section={{ ...MK, icon: "flash-outline" }}>
-              <View style={styles.segment}>
-                {[["gainers", "Gainers"], ["losers", "Losers"], ["active", "Most active"]].map(([k, label]) => (
-                  <Pressable key={k} onPress={() => setMovers(k)} style={[styles.segmentItem, movers === k && styles.segmentActive]}>
-                    <Text style={[styles.segmentText, movers === k && { color: MK.color }]}>{label}</Text>
-                  </Pressable>
-                ))}
-              </View>
-              {list.map((m) => (
-                <Pressable key={m.ticker} style={styles.mover} onPress={() => onOpenStock(m.ticker)}>
-                  <Text style={styles.moverTicker}>{m.ticker}</Text>
-                  <Text style={styles.moverPrice}>${m.close}</Text>
-                  <Text style={styles.small}>${(m.dollar_volume / 1e6).toFixed(0)}M traded</Text>
-                  <View style={[styles.moverBadge, { backgroundColor: changeColor(m.change_pct) }]}>
-                    <Text style={styles.moverPct}>{pct(m.change_pct)}</Text>
+          <SectionCard title="Top movers" subtitle="Liquid stocks: $5+ price, $20M+ traded" section={{ ...sec, icon: "flash-outline" }}>
+            <Segmented options={[["gainers", "Gainers"], ["losers", "Losers"], ["active", "Most active"]]} value={movers} onChange={setMovers} />
+            <View style={{ marginTop: 6 }}>
+              {list.map((m, idx) => (
+                <Pressable key={m.ticker} style={({ hovered }) => [s.mover, hovered && { backgroundColor: c.surfaceAlt }]} onPress={() => onOpenStock(m.ticker)}>
+                  <Text style={s.rank}>{idx + 1}</Text>
+                  <Text style={s.moverTicker}>{m.ticker}</Text>
+                  <Text style={s.moverPrice}>${m.close}</Text>
+                  <Text style={s.moverVol}>${(m.dollar_volume / 1e6).toFixed(0)}M</Text>
+                  <View style={[s.moverBadge, { backgroundColor: changeColor(m.change_pct, c) }]}>
+                    <Text style={[s.moverPct, { color: changeTextColor(m.change_pct, c) }]}>{pct(m.change_pct)}</Text>
                   </View>
                 </Pressable>
               ))}
-              <Text style={styles.small}>Liquid stocks only (price $5+, $20M+ traded).</Text>
-            </SectionCard>
-          </>
-        )}
+            </View>
+          </SectionCard>
+        </>
+      )}
 
-        <SectionCard title="Compare performance" section={{ ...MK, icon: "git-compare-outline" }}>
-          <View style={styles.compareRow}>
-            <TextInput style={styles.compareInput} value={compareInput} onChangeText={setCompareInput} autoCapitalize="characters" autoCorrect={false} placeholder="AAPL, MSFT, SPY" placeholderTextColor={colors.muted} onSubmitEditing={runCompare} />
-            <Pressable style={styles.compareGo} onPress={runCompare} disabled={compareBusy} accessibilityLabel="Compare">
-              {compareBusy ? <ActivityIndicator color={colors.white} size="small" /> : <Ionicons name="arrow-forward" size={20} color={colors.white} />}
-            </Pressable>
-          </View>
-          {compareError && <Text style={styles.error}>{compareError}</Text>}
-          {compare ? (
-            <>
-              <LineChart
-                data={compare.points.map((p) => ({ x: p.date, ...p }))}
-                series={compare.tickers.map((t) => ({ key: t, label: t }))}
-                format={(v) => `${v >= 0 ? "+" : ""}${v.toFixed(0)}%`}
-                xLabel={(d) => d}
-                zero
-              />
-              <Text style={styles.small}>Return since {compare.from}{compare.missing.length ? ` · not found: ${compare.missing.join(", ")}` : ""}</Text>
-            </>
-          ) : (
-            <Text style={styles.muted}>Up to 5 tickers, 1 year of daily closes, rebased to 0%.</Text>
-          )}
-        </SectionCard>
-      </View>
+      <SectionCard title="Compare performance" subtitle="Up to 5 tickers, 1 year, rebased to 0%" section={{ ...sec, icon: "git-compare-outline" }}>
+        <View style={s.compareRow}>
+          <Input style={{ flex: 1 }} value={compareInput} onChangeText={setCompareInput} autoCapitalize="characters" autoCorrect={false} placeholder="AAPL, MSFT, SPY" onSubmitEditing={runCompare} />
+          <Pressable style={s.compareGo} onPress={runCompare} disabled={compareBusy} accessibilityLabel="Compare">
+            {compareBusy ? <ActivityIndicator color={c.onPrimary} size="small" /> : <Ionicons name="arrow-forward" size={20} color={c.onPrimary} />}
+          </Pressable>
+        </View>
+        {compareError && <Banner tone="error">{compareError}</Banner>}
+        {compare ? (
+          <>
+            <View style={s.returns}>
+              {compare.tickers.map((t) => (
+                <View key={t} style={s.returnItem}>
+                  <Text style={s.returnTicker}>{t}</Text>
+                  <Text style={[s.returnValue, { color: colorOf(compare.total_return_pct[t]) }]}>{pct(compare.total_return_pct[t])}</Text>
+                </View>
+              ))}
+            </View>
+            <LineChart
+              data={compare.points.map((p) => ({ x: p.date, ...p }))}
+              series={compare.tickers.map((t) => ({ key: t, label: t }))}
+              format={(v) => `${v >= 0 ? "+" : ""}${v.toFixed(0)}%`}
+              xLabel={(d) => new Date(`${d}T12:00:00Z`).toLocaleDateString()}
+              height={220}
+              zero
+            />
+            {compare.missing.length > 0 && <Text style={s.small}>Not found: {compare.missing.join(", ")}</Text>}
+          </>
+        ) : (
+          <Text style={s.small}>Enter tickers and tap the arrow.</Text>
+        )}
+      </SectionCard>
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  hero: { backgroundColor: MK.color, padding: 20, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
-  heroTitle: { color: colors.white, fontSize: 26, fontWeight: "800" },
-  heroSub: { color: "#DBEAFE", fontSize: 13, marginTop: 4 },
-  indices: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 },
-  index: { width: "48.5%", backgroundColor: "rgba(255,255,255,0.14)", borderRadius: 14, padding: 10 },
-  indexName: { color: "#DBEAFE", fontSize: 12, fontWeight: "700" },
-  indexPrice: { color: colors.white, fontSize: 18, fontWeight: "800", marginTop: 2 },
-  indexChange: { fontWeight: "800", fontSize: 13 },
-  loading: { flexDirection: "row", gap: 10, alignItems: "center", marginTop: 20 },
-  muted: { color: colors.muted, fontSize: 13 },
-  small: { color: colors.muted, fontSize: 12, marginTop: 8 },
-  error: { color: colors.red, marginTop: 10 },
-  breadthBar: { flexDirection: "row", height: 14, borderRadius: 7, overflow: "hidden" },
-  breadthLabels: { flexDirection: "row", justifyContent: "space-between", marginTop: 6 },
-  breadthText: { fontWeight: "800" },
-  sectorRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 5 },
-  sectorName: { width: 120, color: colors.text, fontSize: 13 },
+const useStyles = makeStyles((c) => ({
+  scroll: { padding: 16, paddingBottom: 60 },
+  small: { color: c.muted, fontSize: 12, marginTop: 8 },
+  indices: { flexDirection: "row", gap: 8 },
+  index: { flex: 1, backgroundColor: c.surface, borderRadius: 18, borderWidth: 1, borderColor: c.border, padding: 14 },
+  indexName: { color: c.textSecondary, fontSize: 12, fontWeight: "600" },
+  indexPrice: { color: c.text, fontSize: 19, fontWeight: "800", marginTop: 4, letterSpacing: -0.4, fontVariant: ["tabular-nums"] },
+  indexRow: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 4 },
+  indexChange: { fontWeight: "800", fontSize: 13, fontVariant: ["tabular-nums"] },
+  indexTicker: { color: c.muted, fontSize: 11, marginLeft: "auto" },
+  breadthBar: { flexDirection: "row", height: 12, borderRadius: 6, overflow: "hidden", gap: 2 },
+  breadthLabels: { flexDirection: "row", justifyContent: "space-between", marginTop: 8 },
+  breadthText: { fontWeight: "700", fontSize: 13 },
+  sectorRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 7, paddingHorizontal: 6, borderRadius: 10 },
+  sectorName: { width: 132, color: c.text, fontSize: 13 },
   sectorTrack: { flex: 1, height: 10 },
-  sectorMid: { position: "absolute", left: "50%", top: -2, bottom: -2, width: 1, backgroundColor: colors.border },
+  sectorMid: { position: "absolute", left: "50%", top: -3, bottom: -3, width: 1, backgroundColor: c.borderStrong },
   sectorFill: { position: "absolute", top: 0, bottom: 0, borderRadius: 4 },
-  sectorPct: { width: 56, textAlign: "right", fontWeight: "800", fontSize: 13 },
-  segment: { flexDirection: "row", backgroundColor: colors.bg, borderRadius: 10, padding: 3, marginBottom: 6 },
-  segmentItem: { flex: 1, paddingVertical: 7, borderRadius: 8, alignItems: "center" },
-  segmentActive: { backgroundColor: colors.card },
-  segmentText: { color: colors.muted, fontWeight: "700", fontSize: 13 },
-  mover: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
-  moverTicker: { width: 60, fontWeight: "800", color: colors.text },
-  moverPrice: { width: 72, color: colors.text },
-  moverBadge: { marginLeft: "auto", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, minWidth: 70, alignItems: "center" },
-  moverPct: { fontWeight: "800", color: "#0F172A", fontSize: 13 },
-  compareRow: { flexDirection: "row", gap: 8, marginBottom: 10 },
-  compareInput: { flex: 1, borderWidth: 1.5, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15, fontWeight: "700", color: colors.text },
-  compareGo: { width: 46, borderRadius: 12, backgroundColor: MK.color, alignItems: "center", justifyContent: "center" },
-});
+  sectorPct: { width: 60, textAlign: "right", fontWeight: "800", fontSize: 13, fontVariant: ["tabular-nums"] },
+  mover: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10, paddingHorizontal: 6, borderRadius: 10, borderBottomWidth: 1, borderBottomColor: c.border },
+  rank: { width: 18, color: c.muted, fontSize: 12, fontWeight: "700" },
+  moverTicker: { width: 60, fontWeight: "800", color: c.text },
+  moverPrice: { flex: 1, color: c.textSecondary, fontVariant: ["tabular-nums"] },
+  moverVol: { color: c.muted, fontSize: 12, width: 60, textAlign: "right" },
+  moverBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, minWidth: 76, alignItems: "center" },
+  moverPct: { fontWeight: "800", fontSize: 13, fontVariant: ["tabular-nums"] },
+  compareRow: { flexDirection: "row", gap: 8, marginBottom: 12 },
+  compareGo: { width: 50, borderRadius: 14, backgroundColor: c.primary, alignItems: "center", justifyContent: "center" },
+  returns: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
+  returnItem: { backgroundColor: c.surfaceAlt, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
+  returnTicker: { color: c.muted, fontSize: 11, fontWeight: "700" },
+  returnValue: { fontSize: 16, fontWeight: "800", fontVariant: ["tabular-nums"] },
+}));

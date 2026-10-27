@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../lib/api";
-import { colors } from "../theme";
-import { PrimaryButton, TickerAvatar } from "../components/ui";
+import { makeStyles, useTheme } from "../theme";
+import { BackButton, Banner, Button, Disclaimer, Loading, TickerAvatar } from "../components/ui";
 import TechnicalsCard from "../components/TechnicalsCard";
 import EventsCard from "../components/EventsCard";
 import AlertSheet from "../components/AlertSheet";
 
-/** Quick stock view: chart + technicals (AI read on demand), earnings & insiders, alert and briefing actions. */
+/** Quick stock view: chart + technicals (AI read on demand), earnings & insiders, and actions. */
 export default function StockScreen({ ticker, onBack, onBrief, onOptions, onBacktest }) {
+  const { c, sections } = useTheme();
+  const s = useStyles();
   const [tech, setTech] = useState(null);
   const [techError, setTechError] = useState(null);
   const [explaining, setExplaining] = useState(false);
@@ -24,10 +26,9 @@ export default function StockScreen({ ticker, onBack, onBrief, onOptions, onBack
   async function explain() {
     setExplaining(true);
     try {
-      const withAi = await api.technicals(ticker, { explain: true });
-      setTech(withAi);
+      setTech(await api.technicals(ticker, { explain: true }));
     } catch (e) {
-      setToast(e.message);
+      setToast({ tone: "error", text: e.message });
     }
     setExplaining(false);
   }
@@ -37,84 +38,86 @@ export default function StockScreen({ ticker, onBack, onBrief, onOptions, onBack
     try {
       await onBrief(ticker);
     } catch (e) {
-      setToast(e.message);
+      setToast({ tone: "error", text: e.message });
       setBriefing(false);
     }
   }
 
-  const s = tech?.snapshot;
-  const change = s?.change_1d_pct;
+  const snap = tech?.snapshot;
+  const change = snap?.change_1d_pct;
+  const up = (change ?? 0) >= 0;
+
+  const tools = [
+    { key: "options", label: "Options", sub: "IV, expected move, strategies", section: sections.options, onPress: () => onOptions(ticker) },
+    { key: "backtest", label: "Backtest", sub: "Test trading rules", section: sections.backtest, onPress: () => onBacktest(ticker) },
+    { key: "alert", label: "Alert", sub: "Price, RSI, earnings…", section: sections.alerts, onPress: () => setAlertOpen(true) },
+  ];
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }}>
-      <Pressable onPress={onBack} style={styles.back} hitSlop={10}>
-        <Ionicons name="arrow-back" size={20} color={colors.primary} />
-        <Text style={styles.backText}>Back</Text>
-      </Pressable>
+    <ScrollView contentContainerStyle={s.scroll}>
+      <BackButton onPress={onBack} />
 
-      <View style={styles.hero}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-          <TickerAvatar ticker={ticker} size={52} />
+      <View style={s.hero}>
+        <View style={s.heroTop}>
+          <TickerAvatar ticker={ticker} size={54} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.ticker}>{ticker}</Text>
-            {s && (
-              <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8 }}>
-                <Text style={styles.price}>${s.price}</Text>
-                {change != null && <Text style={{ color: change >= 0 ? colors.green : colors.red, fontWeight: "800" }}>{change >= 0 ? "+" : ""}{change}%</Text>}
+            <Text style={s.ticker}>{ticker}</Text>
+            {snap ? (
+              <View style={s.priceRow}>
+                <Text style={s.price}>${snap.price}</Text>
+                {change != null && (
+                  <View style={[s.change, { backgroundColor: c.soft(up ? c.gain : c.loss) }]}>
+                    <Ionicons name={up ? "caret-up" : "caret-down"} size={12} color={up ? c.gain : c.loss} />
+                    <Text style={[s.changeText, { color: up ? c.gain : c.loss }]}>{Math.abs(change)}%</Text>
+                  </View>
+                )}
               </View>
+            ) : (
+              <Text style={s.muted}>Loading price…</Text>
             )}
           </View>
         </View>
-        <View style={styles.actions}>
-          <PrimaryButton title="Full AI briefing" icon="sparkles" onPress={brief} loading={briefing} style={{ flex: 1 }} />
-          <Pressable style={styles.alertButton} onPress={() => setAlertOpen(true)} accessibilityLabel="Create alert">
-            <Ionicons name="notifications-outline" size={22} color={colors.primary} />
-          </Pressable>
+        <Button title="Full AI briefing" icon="sparkles" onPress={brief} loading={briefing} size="lg" style={{ marginTop: 18 }} />
+        <View style={s.tools}>
+          {tools.map((t) => (
+            <Pressable key={t.key} onPress={t.onPress} style={({ hovered, pressed }) => [s.tool, hovered && { borderColor: t.section.color }, pressed && { opacity: 0.85 }]}>
+              <View style={[s.toolIcon, { backgroundColor: t.section.soft }]}>
+                <Ionicons name={t.section.icon} size={18} color={t.section.color} />
+              </View>
+              <Text style={s.toolTitle}>{t.label}</Text>
+              <Text style={s.toolSub} numberOfLines={1}>{t.sub}</Text>
+            </Pressable>
+          ))}
         </View>
-        <View style={styles.tools}>
-          <Pressable style={[styles.tool, { backgroundColor: "#CFFAFE" }]} onPress={() => onOptions(ticker)}>
-            <Ionicons name="options-outline" size={18} color="#0891B2" />
-            <Text style={[styles.toolText, { color: "#0891B2" }]}>Options</Text>
-          </Pressable>
-          <Pressable style={[styles.tool, { backgroundColor: "#FFEDD5" }]} onPress={() => onBacktest(ticker)}>
-            <Ionicons name="flask-outline" size={18} color="#EA580C" />
-            <Text style={[styles.toolText, { color: "#EA580C" }]}>Backtest</Text>
-          </Pressable>
-        </View>
-        {toast && <Text style={styles.toast}>{toast}</Text>}
+        {toast && <Banner tone={toast.tone}>{toast.text}</Banner>}
       </View>
 
-      {!tech && !techError && (
-        <View style={styles.loading}>
-          <ActivityIndicator color={colors.primary} />
-          <Text style={styles.muted}>Loading chart…</Text>
-        </View>
-      )}
-      {techError && <Text style={[styles.muted, { marginTop: 14 }]}>Chart unavailable: {techError}</Text>}
+      {!tech && !techError && <Loading text="Loading chart and indicators…" />}
+      {techError && <Banner tone="warn">Chart unavailable: {techError}</Banner>}
       {tech && <TechnicalsCard snapshot={tech.snapshot} chart={tech.chart} analysis={tech.analysis} onExplain={explain} explaining={explaining} />}
 
       <EventsCard ticker={ticker} />
 
-      <Text style={styles.disclaimer}>Educational information from market data and SEC filings, not investment advice.</Text>
+      <Disclaimer>Educational information from market data and SEC filings, not investment advice.</Disclaimer>
 
-      <AlertSheet ticker={ticker} price={s?.price} visible={alertOpen} onClose={() => setAlertOpen(false)} onCreated={() => setToast("Alert created. Find it in the Alerts tab.")} />
+      <AlertSheet ticker={ticker} price={snap?.price} visible={alertOpen} onClose={() => setAlertOpen(false)} onCreated={() => setToast({ tone: "success", text: "Alert created. Find it in the Alerts tab." })} />
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  back: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 6, alignSelf: "flex-start" },
-  backText: { color: colors.primary, fontWeight: "700", fontSize: 16 },
-  hero: { backgroundColor: colors.card, borderRadius: 22, padding: 18, marginTop: 8, shadowColor: "#1E1B4B", shadowOpacity: 0.06, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 2 },
-  ticker: { fontSize: 24, fontWeight: "800", color: colors.text },
-  price: { fontSize: 22, fontWeight: "800", color: colors.text },
-  actions: { flexDirection: "row", gap: 10, marginTop: 16 },
-  alertButton: { width: 52, borderRadius: 14, borderWidth: 1.5, borderColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
-  tools: { flexDirection: "row", gap: 10, marginTop: 10 },
-  tool: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 14, paddingVertical: 12 },
-  toolText: { fontWeight: "800" },
-  toast: { color: colors.primaryDark, backgroundColor: colors.primarySoft, borderRadius: 10, padding: 10, marginTop: 10 },
-  loading: { flexDirection: "row", gap: 10, alignItems: "center", marginTop: 20, justifyContent: "center" },
-  muted: { color: colors.muted },
-  disclaimer: { color: colors.muted, fontSize: 11, marginTop: 20, textAlign: "center" },
-});
+const useStyles = makeStyles((c) => ({
+  scroll: { padding: 16, paddingBottom: 60 },
+  hero: { backgroundColor: c.surface, borderRadius: 24, borderWidth: 1, borderColor: c.border, padding: 20, marginTop: 8 },
+  heroTop: { flexDirection: "row", alignItems: "center", gap: 14 },
+  ticker: { fontSize: 15, fontWeight: "700", color: c.textSecondary, letterSpacing: 0.4 },
+  priceRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 2 },
+  price: { fontSize: 32, fontWeight: "800", color: c.text, letterSpacing: -1, fontVariant: ["tabular-nums"] },
+  change: { flexDirection: "row", alignItems: "center", gap: 3, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 },
+  changeText: { fontWeight: "800", fontVariant: ["tabular-nums"] },
+  muted: { color: c.muted, marginTop: 4 },
+  tools: { flexDirection: "row", gap: 8, marginTop: 10 },
+  tool: { flex: 1, borderWidth: 1, borderColor: c.border, borderRadius: 16, padding: 12, backgroundColor: c.surfaceAlt },
+  toolIcon: { width: 34, height: 34, borderRadius: 11, alignItems: "center", justifyContent: "center", marginBottom: 8 },
+  toolTitle: { color: c.text, fontWeight: "800", fontSize: 14 },
+  toolSub: { color: c.muted, fontSize: 11, marginTop: 2 },
+}));

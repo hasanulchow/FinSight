@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Linking, Pressable, ScrollView, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../lib/api";
-import { colors, formatMoney, riskColors, scoreColor, scoreLabel, sections } from "../theme";
-import { Bullets, Pill, PrimaryButton, ScoreBar, SectionCard, TickerAvatar } from "../components/ui";
+import { formatMoney, makeStyles, scoreLabel, useTheme } from "../theme";
+import { BackButton, Bullets, Button, Disclaimer, Pill, ScoreBar, SectionCard, Stat, TickerAvatar } from "../components/ui";
 import TechnicalsCard from "../components/TechnicalsCard";
 import EventsCard from "../components/EventsCard";
 import AskPanel from "../components/AskPanel";
@@ -12,15 +12,18 @@ import AlertSheet from "../components/AlertSheet";
 // Pipeline steps, matched against the progress text the API writes (server/src/agents/orchestrator.js)
 const STEPS = [
   { match: "Looking up", label: "Finding the company", icon: "search-outline" },
-  { match: "Fetching", label: "Pulling quote and SEC financials", icon: "cloud-download-outline" },
+  { match: "Fetching", label: "Pulling quote, prices and SEC financials", icon: "cloud-download-outline" },
   { match: "Reading", label: "Reading the latest 10-K", icon: "book-outline" },
-  { match: "Analysts", label: "Analysts at work (incl. technicals)", icon: "people-outline" },
+  { match: "Analysts", label: "Analysts at work, including technicals", icon: "people-outline" },
   { match: "Writing", label: "Writing your briefing", icon: "create-outline" },
   { match: "Compliance", label: "Compliance review", icon: "shield-checkmark-outline" },
   { match: "Evaluating", label: "Scoring quality", icon: "ribbon-outline" },
 ];
 
 export default function BriefingScreen({ id, onBack }) {
+  const theme = useTheme();
+  const { c, sections } = theme;
+  const s = useStyles();
   const [briefing, setBriefing] = useState(null);
   const [error, setError] = useState(null);
   const [alertOpen, setAlertOpen] = useState(false);
@@ -47,206 +50,195 @@ export default function BriefingScreen({ id, onBack }) {
     };
   }, [id]);
 
-  const back = (
-    <Pressable onPress={onBack} style={styles.back} hitSlop={10}>
-      <Ionicons name="arrow-back" size={20} color={colors.primary} />
-      <Text style={styles.backText}>Back</Text>
-    </Pressable>
-  );
+  if (error) return <Message onBack={onBack} icon="cloud-offline-outline" color={c.loss} title="Couldn't load this briefing" text={error} />;
+  if (!briefing || briefing.status === "running") return <Progress onBack={onBack} briefing={briefing} />;
+  if (briefing.status === "failed") return <Message onBack={onBack} icon="alert-circle-outline" color={c.warn} title={`We couldn't brief ${briefing.ticker}`} text={briefing.error} />;
 
-  if (error) return <Message back={back} icon="cloud-offline-outline" color={colors.red} title="Couldn't load this briefing" text={error} onBack={onBack} />;
-  if (!briefing || briefing.status === "running") return <Progress back={back} briefing={briefing} />;
-  if (briefing.status === "failed") {
-    return <Message back={back} icon="sad-outline" color={colors.amber} title={`We couldn't brief ${briefing.ticker}`} text={briefing.error} onBack={onBack} />;
-  }
-
-  const c = briefing.content;
+  const b = briefing.content;
   const evaluation = briefing.evaluations?.[0];
-  const q = c.snapshot;
+  const q = b.snapshot;
   const up = (q.change ?? 0) >= 0;
-  const trend = up ? { color: colors.green, soft: colors.greenSoft, icon: "trending-up" } : { color: colors.red, soft: colors.redSoft, icon: "trending-down" };
+  const move = up ? c.gain : c.loss;
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }}>
-      {back}
+    <ScrollView contentContainerStyle={s.scroll}>
+      <BackButton onPress={onBack} />
 
-      {/* Hero: company + price */}
-      <View style={styles.hero}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-          <TickerAvatar ticker={c.company.ticker} size={52} />
+      {/* Hero */}
+      <View style={s.hero}>
+        <View style={s.heroTop}>
+          <TickerAvatar ticker={b.company.ticker} size={54} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.company} numberOfLines={2}>{c.company.name}</Text>
-            <Text style={styles.muted}>{c.company.ticker}{c.company.industry ? ` · ${c.company.industry}` : ""}</Text>
+            <Text style={s.company} numberOfLines={2}>{b.company.name}</Text>
+            <Text style={s.muted}>{b.company.ticker}{b.company.exchange ? ` · ${b.company.exchange}` : ""}{b.company.industry ? ` · ${b.company.industry}` : ""}</Text>
           </View>
-          {evaluation && <Pill text={`★ ${Number(evaluation.overall).toFixed(1)}`} color={scoreColor(evaluation.overall)} />}
+          {evaluation && (
+            <View style={[s.scoreBadge, { backgroundColor: c.soft(theme.scoreColor(evaluation.overall)) }]}>
+              <Ionicons name="star" size={12} color={theme.scoreColor(evaluation.overall)} />
+              <Text style={[s.scoreBadgeText, { color: theme.scoreColor(evaluation.overall) }]}>{Number(evaluation.overall).toFixed(1)}</Text>
+            </View>
+          )}
         </View>
-        <View style={styles.priceRow}>
-          <Text style={styles.price}>${q.price?.toFixed(2)}</Text>
-          <View style={[styles.change, { backgroundColor: trend.soft }]}>
-            <Ionicons name={trend.icon} size={16} color={trend.color} />
-            <Text style={{ color: trend.color, fontWeight: "800" }}>
-              {up ? "+" : ""}{q.change?.toFixed(2)} ({up ? "+" : ""}{q.changePercent?.toFixed(2)}%)
-            </Text>
+        <View style={s.priceRow}>
+          <Text style={s.price}>${q.price?.toFixed(2)}</Text>
+          <View style={[s.change, { backgroundColor: c.soft(move) }]}>
+            <Ionicons name={up ? "caret-up" : "caret-down"} size={13} color={move} />
+            <Text style={[s.changeText, { color: move }]}>{Math.abs(q.change ?? 0).toFixed(2)} ({Math.abs(q.changePercent ?? 0).toFixed(2)}%)</Text>
           </View>
         </View>
-        <View style={styles.statsGrid}>
-          <Stat icon="business-outline" color="#4F46E5" label="Market cap" value={q.marketCapMillions ? formatMoney(q.marketCapMillions * 1e6) : "n/a"} />
-          <Stat icon="calculator-outline" color="#0284C7" label="P/E (TTM)" value={q.peRatio ? q.peRatio.toFixed(1) : "n/a"} />
-          <Stat icon="swap-vertical-outline" color="#D97706" label="52-week range" value={q.week52Low && q.week52High ? `$${q.week52Low.toFixed(0)}–${q.week52High.toFixed(0)}` : "n/a"} />
-          <Stat icon="pulse-outline" color="#E11D48" label="Beta" value={q.beta ? q.beta.toFixed(2) : "n/a"} />
+        <Text style={s.small}>Quote as of {new Date(q.asOf).toLocaleString()}</Text>
+        <View style={s.stats}>
+          <Stat icon="business-outline" label="Market cap" value={q.marketCapMillions ? formatMoney(q.marketCapMillions * 1e6) : "n/a"} />
+          <Stat icon="calculator-outline" label="P/E (TTM)" value={q.peRatio ? q.peRatio.toFixed(1) : "n/a"} />
+          <Stat icon="pulse-outline" label="Beta" value={q.beta ? q.beta.toFixed(2) : "n/a"} />
         </View>
         {q.week52Low && q.week52High && <RangeBar low={q.week52Low} high={q.week52High} price={q.price} />}
-        <Text style={styles.small}>Quote as of {new Date(q.asOf).toLocaleString()}</Text>
-        <Pressable style={styles.alertButton} onPress={() => setAlertOpen(true)}>
-          <Ionicons name={alertCreated ? "notifications" : "notifications-outline"} size={18} color={colors.primary} />
-          <Text style={styles.alertButtonText}>{alertCreated ? "Alert created · add another" : "Set a price, indicator or earnings alert"}</Text>
-        </Pressable>
+        <Button
+          title={alertCreated ? "Alert created · add another" : "Set an alert"}
+          icon={alertCreated ? "notifications" : "notifications-outline"}
+          variant="secondary"
+          onPress={() => setAlertOpen(true)}
+          style={{ marginTop: 16 }}
+        />
       </View>
 
-      <SectionCard title="Quick read" section={sections.summary} right={<Pill text="30 sec" color={sections.summary.color} />}>
-        <Text style={styles.body}>{c.executive_summary}</Text>
+      <SectionCard title="Quick read" subtitle="Everything you need in 30 seconds" section={sections.summary}>
+        <Text style={s.lead}>{b.executive_summary}</Text>
       </SectionCard>
 
-      {c.changes_since_last?.length > 0 && (
-        <SectionCard title="Since your last look" section={{ color: "#0891B2", soft: "#CFFAFE", icon: "git-compare-outline" }}>
-          <Bullets items={c.changes_since_last} color="#0891B2" />
+      {b.changes_since_last?.length > 0 && (
+        <SectionCard title="Since your last look" section={sections.changes}>
+          <Bullets items={b.changes_since_last} color={sections.changes.color} />
         </SectionCard>
       )}
 
-      {c.technicals && <TechnicalsCard snapshot={c.technicals.snapshot} chart={c.technicals.chart} analysis={c.technicals.analysis} />}
+      {b.technicals && <TechnicalsCard snapshot={b.technicals.snapshot} chart={b.technicals.chart} analysis={b.technicals.analysis} />}
 
       <SectionCard title="Key takeaways" section={sections.takeaways}>
-        <Bullets items={c.key_takeaways} color={sections.takeaways.color} />
+        <Bullets items={b.key_takeaways} color={sections.takeaways.color} />
       </SectionCard>
 
       <SectionCard title="Market today" section={sections.market}>
-        <Text style={[styles.body, { marginBottom: 8 }]}>{c.market.commentary}</Text>
-        <Bullets items={c.market.key_stats} color={sections.market.color} />
+        <Text style={[s.body, { marginBottom: 10 }]}>{b.market.commentary}</Text>
+        <Bullets items={b.market.key_stats} color={sections.market.color} />
       </SectionCard>
 
-      <SectionCard title="Financials" section={sections.financials} right={<Pill text="SEC data" color={sections.financials.color} />}>
-        <FinancialTable financials={c.financials} />
-        <Text style={[styles.body, { marginTop: 12 }]}>{c.fundamentals.summary}</Text>
-        {c.fundamentals.trends.map((t) => <Trend key={t.metric} trend={t} />)}
-        <View style={styles.twoCol}>
-          <View style={[styles.miniCard, { backgroundColor: colors.greenSoft }]}>
-            <Text style={[styles.miniTitle, { color: colors.green }]}>👍 Strengths</Text>
-            {c.fundamentals.strengths.map((s, i) => <Text key={i} style={styles.miniText}>{s}</Text>)}
+      <SectionCard title="Financials" subtitle="From SEC XBRL filings" section={sections.financials}>
+        <FinancialTable financials={b.financials} />
+        <Text style={[s.body, { marginTop: 14 }]}>{b.fundamentals.summary}</Text>
+        {b.fundamentals.trends.map((t) => <Trend key={t.metric} trend={t} />)}
+        <View style={s.twoCol}>
+          <View style={[s.mini, { backgroundColor: c.gainSoft }]}>
+            <View style={s.miniHead}><Ionicons name="thumbs-up-outline" size={14} color={c.gain} /><Text style={[s.miniTitle, { color: c.gain }]}>Strengths</Text></View>
+            {b.fundamentals.strengths.map((x, i) => <Text key={i} style={s.miniText}>{x}</Text>)}
           </View>
-          <View style={[styles.miniCard, { backgroundColor: colors.amberSoft }]}>
-            <Text style={[styles.miniTitle, { color: colors.amber }]}>👀 Watch</Text>
-            {c.fundamentals.concerns.map((s, i) => <Text key={i} style={styles.miniText}>{s}</Text>)}
+          <View style={[s.mini, { backgroundColor: c.warnSoft }]}>
+            <View style={s.miniHead}><Ionicons name="eye-outline" size={14} color={c.warn} /><Text style={[s.miniTitle, { color: c.warn }]}>Watch</Text></View>
+            {b.fundamentals.concerns.map((x, i) => <Text key={i} style={s.miniText}>{x}</Text>)}
           </View>
         </View>
       </SectionCard>
 
       <SectionCard title="The business" section={sections.business}>
-        <Text style={styles.body}>{c.business.business_overview}</Text>
-        {c.business.segments.length > 0 && (
-          <View style={styles.segmentWrap}>
-            {c.business.segments.map((s, i) => <Pill key={i} text={s} color={sections.business.color} />)}
-          </View>
+        <Text style={s.body}>{b.business.business_overview}</Text>
+        {b.business.segments.length > 0 && (
+          <View style={s.wrap}>{b.business.segments.map((x, i) => <Pill key={i} text={x} color={sections.business.color} />)}</View>
         )}
-        <Text style={styles.subhead}>Management outlook</Text>
-        <Text style={styles.body}>{c.business.management_outlook}</Text>
+        <Text style={s.subhead}>Management outlook</Text>
+        <Text style={s.body}>{b.business.management_outlook}</Text>
       </SectionCard>
 
-      <SectionCard title="Top risks" section={sections.risks} right={<Pill text="10-K Item 1A" color={sections.risks.color} />}>
-        <Text style={[styles.body, { marginBottom: 4 }]}>{c.risks.overview}</Text>
-        {c.risks.top_risks.map((r, i) => (
-          <View key={r.title} style={styles.risk}>
-            <View style={styles.riskHead}>
-              <View style={[styles.riskNum, { backgroundColor: sections.risks.soft }]}>
-                <Text style={{ color: sections.risks.color, fontWeight: "800" }}>{i + 1}</Text>
-              </View>
-              <Text style={styles.riskTitle}>{r.title}</Text>
+      <SectionCard title="Top risks" subtitle="From 10-K Item 1A" section={sections.risks}>
+        <Text style={s.body}>{b.risks.overview}</Text>
+        {b.risks.top_risks.map((r, i) => (
+          <View key={r.title} style={s.risk}>
+            <View style={s.riskHead}>
+              <View style={[s.riskNum, { backgroundColor: sections.risks.soft }]}><Text style={{ color: sections.risks.color, fontWeight: "800", fontSize: 12 }}>{i + 1}</Text></View>
+              <Text style={s.riskTitle}>{r.title}</Text>
+              <Pill text={r.category} color={theme.riskColor(r.category)} />
             </View>
-            <Pill text={r.category} color={riskColors[r.category] ?? colors.muted} />
-            <Text style={[styles.body, { marginTop: 6 }]}>{r.summary}</Text>
-            <View style={styles.quote}>
-              <Ionicons name="chatbox-ellipses-outline" size={14} color={colors.muted} />
-              <Text style={styles.quoteText}>“{r.evidence}”</Text>
+            <Text style={s.body}>{r.summary}</Text>
+            <View style={s.quote}>
+              <View style={[s.quoteBar, { backgroundColor: sections.risks.color }]} />
+              <Text style={s.quoteText}>“{r.evidence}”</Text>
             </View>
           </View>
         ))}
       </SectionCard>
 
       <SectionCard title="Recent filings" section={sections.filings}>
-        {c.business.recent_events.map((e, i) => (
-          <View key={i} style={styles.timelineRow}>
-            <View style={styles.timelineDot} />
-            <View style={{ flex: 1 }}>
+        {b.business.recent_events.map((e, i) => (
+          <View key={i} style={s.timelineRow}>
+            <View style={s.timelineRail}>
+              <View style={[s.timelineDot, { backgroundColor: sections.filings.color }]} />
+              {i < b.business.recent_events.length - 1 && <View style={s.timelineLine} />}
+            </View>
+            <View style={{ flex: 1, paddingBottom: 14 }}>
               <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
                 <Pill text={e.form} color={sections.filings.color} />
-                <Text style={styles.small}>{e.date}</Text>
+                <Text style={s.small}>{e.date}</Text>
               </View>
-              <Text style={[styles.body, { marginTop: 4 }]}>{e.summary}</Text>
+              <Text style={[s.body, { marginTop: 6 }]}>{e.summary}</Text>
             </View>
           </View>
         ))}
-        {c.sources.latest10K && (
-          <Pressable style={styles.linkButton} onPress={() => Linking.openURL(c.sources.latest10K)}>
+        {b.sources.latest10K && (
+          <Pressable style={s.link} onPress={() => Linking.openURL(b.sources.latest10K)}>
             <Ionicons name="open-outline" size={16} color={sections.filings.color} />
-            <Text style={[styles.linkText, { color: sections.filings.color }]}>Open the latest 10-K on SEC.gov</Text>
+            <Text style={[s.linkText, { color: sections.filings.color }]}>Open the latest 10-K on SEC.gov</Text>
           </Pressable>
         )}
       </SectionCard>
 
-      <EventsCard ticker={c.company.ticker} />
+      <EventsCard ticker={b.company.ticker} />
 
       <SectionCard title="Talking points" section={sections.talking}>
-        <Bullets items={c.talking_points} color={sections.talking.color} />
+        <Bullets items={b.talking_points} color={sections.talking.color} />
       </SectionCard>
 
       <SectionCard title="Questions to consider" section={sections.questions}>
-        <Bullets items={c.questions_to_consider} color={sections.questions.color} />
+        <Bullets items={b.questions_to_consider} color={sections.questions.color} />
       </SectionCard>
 
       <AskPanel briefingId={briefing.id} />
 
-      {evaluation && <QualityCard evaluation={evaluation} compliance={c.compliance} logs={briefing.agent_logs} />}
+      {evaluation && <QualityCard evaluation={evaluation} compliance={b.compliance} logs={briefing.agent_logs} />}
 
       <Feedback id={briefing.id} />
 
-      <AlertSheet ticker={c.company.ticker} price={q.price} visible={alertOpen} onClose={() => setAlertOpen(false)} onCreated={() => setAlertCreated(true)} />
+      <Disclaimer>{b.disclaimer}</Disclaimer>
 
-      <View style={styles.disclaimer}>
-        <Ionicons name="information-circle-outline" size={16} color={colors.muted} />
-        <Text style={styles.disclaimerText}>{c.disclaimer}</Text>
-      </View>
+      <AlertSheet ticker={b.company.ticker} price={q.price} visible={alertOpen} onClose={() => setAlertOpen(false)} onCreated={() => setAlertCreated(true)} />
     </ScrollView>
   );
 }
 
-function Progress({ back, briefing }) {
+function Progress({ onBack, briefing }) {
+  const { c } = useTheme();
+  const s = useStyles();
   const progress = briefing?.progress ?? "";
-  const current = Math.max(0, STEPS.findIndex((s) => progress.startsWith(s.match)));
+  const current = Math.max(0, STEPS.findIndex((st) => progress.startsWith(st.match)));
   const pct = Math.round(((current + 0.5) / STEPS.length) * 100);
   return (
-    <ScrollView contentContainerStyle={{ padding: 16 }}>
-      {back}
-      <View style={[styles.hero, { alignItems: "center" }]}>
-        <View style={styles.progressBadge}>
-          <Ionicons name="sparkles" size={28} color={colors.white} />
-        </View>
-        <Text style={styles.progressTitle}>Researching {briefing?.ticker ?? ""}</Text>
-        <Text style={styles.muted}>This usually takes about a minute. Feel free to leave and come back.</Text>
-        <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { width: `${pct}%` }]} />
-        </View>
-        <Text style={[styles.small, { color: colors.primary, fontWeight: "700" }]}>{pct}%</Text>
+    <ScrollView contentContainerStyle={s.scroll}>
+      <BackButton onPress={onBack} />
+      <View style={[s.hero, { alignItems: "center", paddingVertical: 28 }]}>
+        <View style={s.progressBadge}><Ionicons name="sparkles" size={26} color={c.primary} /></View>
+        <Text style={s.progressTitle}>Researching {briefing?.ticker ?? ""}</Text>
+        <Text style={[s.muted, { textAlign: "center" }]}>Usually about a minute. You can leave and come back.</Text>
+        <View style={s.progressTrack}><View style={[s.progressFill, { width: `${pct}%` }]} /></View>
+        <Text style={[s.small, { color: c.primary, fontWeight: "700" }]}>{pct}%</Text>
       </View>
-
-      <View style={[styles.hero, { marginTop: 14 }]}>
-        {STEPS.map((s, i) => {
+      <View style={[s.hero, { marginTop: 12 }]}>
+        {STEPS.map((st, i) => {
           const done = i < current;
           const active = i === current;
           return (
-            <View key={s.match} style={styles.stepRow}>
-              <View style={[styles.stepIcon, { backgroundColor: done ? colors.greenSoft : active ? colors.primarySoft : colors.bg }]}>
-                {done ? <Ionicons name="checkmark" size={18} color={colors.green} /> : active ? <ActivityIndicator size="small" color={colors.primary} /> : <Ionicons name={s.icon} size={16} color={colors.muted} />}
+            <View key={st.match} style={s.stepRow}>
+              <View style={[s.stepIcon, { backgroundColor: done ? c.gainSoft : active ? c.primarySoft : c.surfaceAlt }]}>
+                {done ? <Ionicons name="checkmark" size={17} color={c.gain} /> : active ? <ActivityIndicator size="small" color={c.primary} /> : <Ionicons name={st.icon} size={15} color={c.muted} />}
               </View>
-              <Text style={[styles.stepText, done && { color: colors.green }, active && { color: colors.primary, fontWeight: "800" }]}>{s.label}</Text>
+              <Text style={[s.stepText, done && { color: c.textSecondary }, active && { color: c.text, fontWeight: "700" }]}>{st.label}</Text>
             </View>
           );
         })}
@@ -255,85 +247,69 @@ function Progress({ back, briefing }) {
   );
 }
 
-function Message({ back, icon, color, title, text, onBack }) {
+function Message({ onBack, icon, color, title, text }) {
+  const { c } = useTheme();
+  const s = useStyles();
   return (
-    <View style={{ flex: 1, padding: 16 }}>
-      {back}
-      <View style={[styles.hero, { alignItems: "center", marginTop: 30 }]}>
-        <Ionicons name={icon} size={44} color={color} />
-        <Text style={styles.progressTitle}>{title}</Text>
-        <Text style={[styles.muted, { textAlign: "center", marginTop: 6 }]}>{text}</Text>
-        <PrimaryButton title="Try another ticker" icon="search" onPress={onBack} style={{ marginTop: 18, alignSelf: "stretch" }} />
+    <ScrollView contentContainerStyle={s.scroll}>
+      <BackButton onPress={onBack} />
+      <View style={[s.hero, { alignItems: "center", marginTop: 24, paddingVertical: 30 }]}>
+        <View style={[s.progressBadge, { backgroundColor: c.soft(color) }]}><Ionicons name={icon} size={28} color={color} /></View>
+        <Text style={s.progressTitle}>{title}</Text>
+        <Text style={[s.muted, { textAlign: "center", marginTop: 6 }]}>{text}</Text>
+        <Button title="Try another ticker" icon="search" onPress={onBack} style={{ marginTop: 20, alignSelf: "stretch" }} />
       </View>
-    </View>
-  );
-}
-
-function Stat({ icon, color, label, value }) {
-  return (
-    <View style={styles.stat}>
-      <View style={[styles.statIcon, { backgroundColor: `${color}1A` }]}>
-        <Ionicons name={icon} size={16} color={color} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.statLabel}>{label}</Text>
-        <Text style={styles.statValue}>{value}</Text>
-      </View>
-    </View>
+    </ScrollView>
   );
 }
 
 function RangeBar({ low, high, price }) {
+  const s = useStyles();
   const pos = Math.min(100, Math.max(0, ((price - low) / (high - low)) * 100));
   return (
-    <View style={{ marginTop: 14 }}>
-      <View style={styles.rangeTrack}>
-        <View style={[styles.rangeMarker, { left: `${pos}%` }]} />
+    <View style={{ marginTop: 16 }}>
+      <View style={s.rangeTrack}>
+        <View style={[s.rangeFill, { width: `${pos}%` }]} />
+        <View style={[s.rangeMarker, { left: `${pos}%` }]} />
       </View>
-      <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 4 }}>
-        <Text style={styles.small}>52w low ${low.toFixed(0)}</Text>
-        <Text style={styles.small}>52w high ${high.toFixed(0)}</Text>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
+        <Text style={s.small}>52w low ${low.toFixed(2)}</Text>
+        <Text style={s.small}>52w high ${high.toFixed(2)}</Text>
       </View>
     </View>
   );
 }
 
-const TREND = {
-  up: { icon: "arrow-up-circle", color: colors.green },
-  down: { icon: "arrow-down-circle", color: colors.red },
-  flat: { icon: "remove-circle", color: colors.muted },
-  mixed: { icon: "swap-vertical", color: colors.amber },
-};
-
 function Trend({ trend }) {
-  const t = TREND[trend.direction] ?? TREND.flat;
+  const { c } = useTheme();
+  const s = useStyles();
+  const T = { up: { icon: "arrow-up", color: c.gain }, down: { icon: "arrow-down", color: c.loss }, flat: { icon: "remove", color: c.muted }, mixed: { icon: "swap-vertical", color: c.warn } };
+  const t = T[trend.direction] ?? T.flat;
   return (
-    <View style={styles.trendRow}>
-      <Ionicons name={t.icon} size={20} color={t.color} />
-      <Text style={[styles.body, { flex: 1 }]}>
-        <Text style={{ fontWeight: "800" }}>{trend.metric}: </Text>{trend.detail}
-      </Text>
+    <View style={s.trendRow}>
+      <View style={[s.trendIcon, { backgroundColor: c.soft(t.color) }]}><Ionicons name={t.icon} size={14} color={t.color} /></View>
+      <Text style={[s.body, { flex: 1 }]}><Text style={{ fontWeight: "700" }}>{trend.metric}: </Text>{trend.detail}</Text>
     </View>
   );
 }
 
 function FinancialTable({ financials }) {
-  const rows = [["Revenue", "revenue"], ["Operating income", "operatingIncome"], ["Net income", "netIncome"], ["Diluted EPS", "epsDiluted"], ["Cash", "cash"], ["Long-term debt", "longTermDebt"]]
-    .filter(([, k]) => financials[k]?.length);
+  const s = useStyles();
+  const rows = [["Revenue", "revenue"], ["Operating income", "operatingIncome"], ["Net income", "netIncome"], ["Diluted EPS", "epsDiluted"], ["Cash", "cash"], ["Long-term debt", "longTermDebt"]].filter(([, k]) => financials[k]?.length);
   const years = [...new Set(rows.flatMap(([, k]) => financials[k].map((p) => p.year)))].sort().slice(-4);
-  if (!rows.length) return <Text style={styles.muted}>No SEC financial data available for this company.</Text>;
+  if (!rows.length) return <Text style={s.muted}>No SEC financial data available for this company.</Text>;
   return (
-    <View style={styles.table}>
-      <View style={[styles.tr, { backgroundColor: sections.financials.soft }]}>
-        <Text style={[styles.td, styles.th, { flex: 1.6, textAlign: "left" }]}>USD</Text>
-        {years.map((y) => <Text key={y} style={[styles.td, styles.th]}>{y}</Text>)}
+    <View style={s.table}>
+      <View style={[s.tr, s.thRow]}>
+        <Text style={[s.td, s.th, { flex: 1.6, textAlign: "left" }]}>USD</Text>
+        {years.map((y) => <Text key={y} style={[s.td, s.th]}>{y}</Text>)}
       </View>
       {rows.map(([label, key], i) => (
-        <View key={key} style={[styles.tr, i % 2 === 1 && { backgroundColor: "#FAFAFA" }]}>
-          <Text style={[styles.td, { flex: 1.6, textAlign: "left", fontWeight: "600" }]}>{label}</Text>
+        <View key={key} style={[s.tr, i % 2 === 1 && s.trAlt]}>
+          <Text style={[s.td, { flex: 1.6, textAlign: "left", fontWeight: "600" }]}>{label}</Text>
           {years.map((y) => {
             const v = financials[key].find((p) => p.year === y)?.value;
-            return <Text key={y} style={styles.td}>{v == null ? "–" : key === "epsDiluted" ? `$${v.toFixed(2)}` : formatMoney(v)}</Text>;
+            return <Text key={y} style={s.td}>{v == null ? "–" : key === "epsDiluted" ? `$${v.toFixed(2)}` : formatMoney(v)}</Text>;
           })}
         </View>
       ))}
@@ -342,46 +318,48 @@ function FinancialTable({ financials }) {
 }
 
 function QualityCard({ evaluation, compliance, logs = [] }) {
+  const theme = useTheme();
+  const { c, sections } = theme;
+  const s = useStyles();
   const [showTrace, setShowTrace] = useState(false);
   const checks = evaluation.checks ?? {};
-  const totalTokens = logs.reduce((s, l) => s + (l.input_tokens ?? 0) + (l.output_tokens ?? 0), 0);
+  const totalTokens = logs.reduce((sum, l) => sum + (l.input_tokens ?? 0) + (l.output_tokens ?? 0), 0);
   const overall = Number(evaluation.overall);
+  const col = theme.scoreColor(overall);
   return (
-    <SectionCard title="How reliable is this?" section={sections.quality}>
-      <View style={[styles.overall, { backgroundColor: `${scoreColor(overall)}1A` }]}>
-        <Text style={[styles.overallScore, { color: scoreColor(overall) }]}>{overall.toFixed(1)}</Text>
+    <SectionCard title="How reliable is this?" subtitle="Scored by an independent AI reviewer" section={sections.quality}>
+      <View style={[s.overall, { backgroundColor: c.soft(col) }]}>
+        <Text style={[s.overallScore, { color: col }]}>{overall.toFixed(1)}</Text>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.overallLabel, { color: scoreColor(overall) }]}>{scoreLabel(overall)}</Text>
-          <Text style={styles.small}>Scored by an independent AI reviewer against the source data</Text>
+          <Text style={[s.overallLabel, { color: col }]}>{scoreLabel(overall)}</Text>
+          <Text style={s.small}>Checked against the source data it was built from</Text>
         </View>
       </View>
       <ScoreBar label="Accuracy" value={evaluation.faithfulness} />
       <ScoreBar label="Completeness" value={evaluation.completeness} />
       <ScoreBar label="Compliance" value={evaluation.compliance} />
       <ScoreBar label="Clarity" value={evaluation.clarity} />
-      <Text style={[styles.body, { marginTop: 10 }]}>{evaluation.rationale}</Text>
-
+      <Text style={[s.body, { marginTop: 12 }]}>{evaluation.rationale}</Text>
       {evaluation.issues?.length > 0 && (
-        <View style={[styles.miniCard, { backgroundColor: colors.amberSoft, marginTop: 10 }]}>
-          <Text style={[styles.miniTitle, { color: colors.amber }]}>Double-check these claims</Text>
-          {evaluation.issues.map((s, i) => <Text key={i} style={styles.miniText}>• {s}</Text>)}
+        <View style={[s.mini, { backgroundColor: c.warnSoft, marginTop: 12 }]}>
+          <Text style={[s.miniTitle, { color: c.warn }]}>Double-check these claims</Text>
+          {evaluation.issues.map((x, i) => <Text key={i} style={s.miniText}>• {x}</Text>)}
         </View>
       )}
-
-      <View style={styles.checkRow}>
-        <Pill text={`✓ ${checks.passed}/${checks.total} automated checks`} color={checks.passed === checks.total ? colors.green : colors.amber} />
-        <Pill text={`${compliance?.issues_found?.length ?? 0} compliance edits`} color={colors.primary} />
+      <View style={s.wrap}>
+        <Pill text={`${checks.passed}/${checks.total} automated checks`} color={checks.passed === checks.total ? c.gain : c.warn} icon="checkmark-done" />
+        {evaluation.grounding?.numbers?.rate != null && <Pill text={`${Math.round(evaluation.grounding.numbers.rate * 100)}% numbers grounded`} color={c.primary} />}
+        <Pill text={`${compliance?.issues_found?.length ?? 0} compliance edits`} color={c.primary} />
       </View>
-
-      <Pressable style={styles.linkButton} onPress={() => setShowTrace(!showTrace)}>
-        <Ionicons name={showTrace ? "chevron-up" : "chevron-down"} size={16} color={colors.primary} />
-        <Text style={[styles.linkText, { color: colors.primary }]}>{showTrace ? "Hide" : "Show"} agent trace · {logs.length} calls · {totalTokens.toLocaleString()} tokens</Text>
+      <Pressable style={s.link} onPress={() => setShowTrace(!showTrace)}>
+        <Ionicons name={showTrace ? "chevron-up" : "chevron-down"} size={16} color={c.primary} />
+        <Text style={[s.linkText, { color: c.primary }]}>{showTrace ? "Hide" : "Show"} agent trace · {logs.length} calls · {totalTokens.toLocaleString()} tokens</Text>
       </Pressable>
       {showTrace && logs.map((l, i) => (
-        <View key={i} style={styles.traceRow}>
-          <Ionicons name={l.status === "ok" ? "checkmark-circle" : "close-circle"} size={14} color={l.status === "ok" ? colors.green : colors.red} />
-          <Text style={[styles.small, { flex: 1, marginTop: 0 }]}>{l.agent.replace(/_/g, " ")}</Text>
-          <Text style={[styles.small, { marginTop: 0 }]}>{(l.latency_ms / 1000).toFixed(1)}s · {((l.input_tokens ?? 0) + (l.output_tokens ?? 0)).toLocaleString()} tok</Text>
+        <View key={i} style={s.traceRow}>
+          <Ionicons name={l.status === "ok" ? "checkmark-circle" : "close-circle"} size={14} color={l.status === "ok" ? c.gain : c.loss} />
+          <Text style={[s.small, { flex: 1, textTransform: "capitalize" }]}>{l.agent.replace(/_/g, " ")}</Text>
+          <Text style={s.small}>{(l.latency_ms / 1000).toFixed(1)}s · {((l.input_tokens ?? 0) + (l.output_tokens ?? 0)).toLocaleString()} tok</Text>
         </View>
       ))}
     </SectionCard>
@@ -389,6 +367,8 @@ function QualityCard({ evaluation, compliance, logs = [] }) {
 }
 
 function Feedback({ id }) {
+  const { c } = useTheme();
+  const s = useStyles();
   const [sent, setSent] = useState(null);
   const send = async (rating) => {
     try {
@@ -400,78 +380,78 @@ function Feedback({ id }) {
   };
   const title = sent === "error" ? "Couldn't save your feedback. Try again." : sent ? "Thanks! Your feedback helps us improve." : "Was this briefing helpful?";
   return (
-    <View style={styles.feedback}>
-      <Text style={styles.feedbackTitle}>{title}</Text>
-      <View style={{ flexDirection: "row", gap: 10 }}>
-        <Pressable style={[styles.thumb, sent === 1 && { backgroundColor: colors.greenSoft, borderColor: colors.green }]} onPress={() => send(1)} accessibilityLabel="Helpful">
-          <Ionicons name="thumbs-up" size={20} color={sent === 1 ? colors.green : colors.muted} />
-        </Pressable>
-        <Pressable style={[styles.thumb, sent === -1 && { backgroundColor: colors.redSoft, borderColor: colors.red }]} onPress={() => send(-1)} accessibilityLabel="Not helpful">
-          <Ionicons name="thumbs-down" size={20} color={sent === -1 ? colors.red : colors.muted} />
-        </Pressable>
+    <View style={s.feedback}>
+      <Text style={s.feedbackTitle}>{title}</Text>
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        {[[1, "thumbs-up", c.gain, "Helpful"], [-1, "thumbs-down", c.loss, "Not helpful"]].map(([r, icon, col, label]) => (
+          <Pressable key={r} style={[s.thumb, sent === r && { backgroundColor: c.soft(col), borderColor: col }]} onPress={() => send(r)} accessibilityLabel={label}>
+            <Ionicons name={sent === r ? icon : `${icon}-outline`} size={19} color={sent === r ? col : c.textSecondary} />
+          </Pressable>
+        ))}
       </View>
     </View>
   );
 }
 
-const cardShadow = { shadowColor: "#1E1B4B", shadowOpacity: 0.06, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 2 };
-
-const styles = StyleSheet.create({
-  back: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 6, alignSelf: "flex-start" },
-  alertButton: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 14, backgroundColor: colors.primarySoft, borderRadius: 12, padding: 12 },
-  alertButtonText: { color: colors.primaryDark, fontWeight: "700", flex: 1 },
-  backText: { color: colors.primary, fontWeight: "700", fontSize: 16 },
-  muted: { color: colors.muted },
-  small: { color: colors.muted, fontSize: 12, marginTop: 8 },
-  body: { color: colors.text, fontSize: 15, lineHeight: 22 },
-  subhead: { fontWeight: "800", color: colors.text, marginTop: 14, marginBottom: 4 },
-  hero: { backgroundColor: colors.card, borderRadius: 22, padding: 18, marginTop: 8, ...cardShadow },
-  company: { fontSize: 20, fontWeight: "800", color: colors.text },
-  priceRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 14, flexWrap: "wrap" },
-  price: { fontSize: 34, fontWeight: "800", color: colors.text },
-  change: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
-  statsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 },
-  stat: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.bg, borderRadius: 14, padding: 10, width: "48.5%" },
-  statIcon: { width: 30, height: 30, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  statLabel: { color: colors.muted, fontSize: 11 },
-  statValue: { fontSize: 15, fontWeight: "800", color: colors.text },
-  rangeTrack: { height: 8, borderRadius: 4, backgroundColor: colors.primarySoft },
-  rangeMarker: { position: "absolute", top: -4, width: 16, height: 16, marginLeft: -8, borderRadius: 8, backgroundColor: colors.primary, borderWidth: 3, borderColor: colors.white },
-  table: { borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: colors.border },
-  tr: { flexDirection: "row", paddingVertical: 8, paddingHorizontal: 8 },
-  td: { flex: 1, fontSize: 12, color: colors.text, textAlign: "right" },
-  th: { fontWeight: "800", color: sections.financials.color },
-  trendRow: { flexDirection: "row", gap: 8, alignItems: "flex-start", marginTop: 8 },
-  twoCol: { flexDirection: "row", gap: 8, marginTop: 12 },
-  miniCard: { flex: 1, borderRadius: 14, padding: 12 },
-  miniTitle: { fontWeight: "800", marginBottom: 6 },
-  miniText: { color: colors.text, fontSize: 13, lineHeight: 19, marginBottom: 4 },
-  segmentWrap: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 },
-  risk: { backgroundColor: "#FFF8F9", borderRadius: 14, padding: 12, marginTop: 10 },
-  riskHead: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 6 },
-  riskNum: { width: 26, height: 26, borderRadius: 13, alignItems: "center", justifyContent: "center" },
-  riskTitle: { flex: 1, fontWeight: "800", color: colors.text, fontSize: 15 },
-  quote: { flexDirection: "row", gap: 6, marginTop: 8, backgroundColor: colors.card, borderRadius: 10, padding: 8 },
-  quoteText: { flex: 1, color: colors.muted, fontStyle: "italic", fontSize: 13, lineHeight: 18 },
-  timelineRow: { flexDirection: "row", gap: 12, paddingVertical: 8, borderLeftWidth: 2, borderLeftColor: sections.filings.soft, marginLeft: 5, paddingLeft: 14 },
-  timelineDot: { position: "absolute", left: -7, top: 14, width: 12, height: 12, borderRadius: 6, backgroundColor: sections.filings.color },
-  linkButton: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 12 },
+const useStyles = makeStyles((c) => ({
+  scroll: { padding: 16, paddingBottom: 60 },
+  muted: { color: c.textSecondary, fontSize: 14 },
+  small: { color: c.muted, fontSize: 12, marginTop: 4 },
+  body: { color: c.text, fontSize: 15, lineHeight: 23 },
+  lead: { color: c.text, fontSize: 16, lineHeight: 25, fontWeight: "500" },
+  subhead: { fontWeight: "700", color: c.text, marginTop: 16, marginBottom: 4, fontSize: 14 },
+  hero: { backgroundColor: c.surface, borderRadius: 24, borderWidth: 1, borderColor: c.border, padding: 20, marginTop: 8 },
+  heroTop: { flexDirection: "row", alignItems: "center", gap: 14 },
+  company: { fontSize: 21, fontWeight: "800", color: c.text, letterSpacing: -0.4 },
+  scoreBadge: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
+  scoreBadgeText: { fontWeight: "800" },
+  priceRow: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 18, flexWrap: "wrap" },
+  price: { fontSize: 38, fontWeight: "800", color: c.text, letterSpacing: -1.2, fontVariant: ["tabular-nums"] },
+  change: { flexDirection: "row", alignItems: "center", gap: 3, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
+  changeText: { fontWeight: "800", fontVariant: ["tabular-nums"] },
+  stats: { flexDirection: "row", gap: 8, marginTop: 16 },
+  rangeTrack: { height: 6, borderRadius: 3, backgroundColor: c.surfaceAlt },
+  rangeFill: { height: 6, borderRadius: 3, backgroundColor: c.primarySoft },
+  rangeMarker: { position: "absolute", top: -5, width: 16, height: 16, marginLeft: -8, borderRadius: 8, backgroundColor: c.primary, borderWidth: 3, borderColor: c.surface },
+  twoCol: { flexDirection: "row", gap: 8, marginTop: 14 },
+  mini: { flex: 1, borderRadius: 14, padding: 12 },
+  miniHead: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 },
+  miniTitle: { fontWeight: "800", fontSize: 13 },
+  miniText: { color: c.text, fontSize: 13, lineHeight: 19, marginBottom: 4 },
+  wrap: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 12 },
+  risk: { borderTopWidth: 1, borderTopColor: c.border, paddingTop: 14, marginTop: 14 },
+  riskHead: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8, flexWrap: "wrap" },
+  riskNum: { width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  riskTitle: { flex: 1, fontWeight: "700", color: c.text, fontSize: 15, minWidth: 140 },
+  quote: { flexDirection: "row", gap: 10, marginTop: 10 },
+  quoteBar: { width: 3, borderRadius: 2, opacity: 0.6 },
+  quoteText: { flex: 1, color: c.textSecondary, fontStyle: "italic", fontSize: 13, lineHeight: 19 },
+  timelineRow: { flexDirection: "row", gap: 12 },
+  timelineRail: { width: 14, alignItems: "center" },
+  timelineDot: { width: 10, height: 10, borderRadius: 5, marginTop: 6 },
+  timelineLine: { flex: 1, width: 2, backgroundColor: c.border, marginTop: 4 },
+  link: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 14 },
   linkText: { fontWeight: "700" },
-  overall: { flexDirection: "row", alignItems: "center", gap: 14, borderRadius: 16, padding: 14, marginBottom: 10 },
-  overallScore: { fontSize: 38, fontWeight: "900" },
+  trendRow: { flexDirection: "row", gap: 10, alignItems: "flex-start", marginTop: 10 },
+  trendIcon: { width: 24, height: 24, borderRadius: 8, alignItems: "center", justifyContent: "center", marginTop: 1 },
+  table: { borderRadius: 14, overflow: "hidden", borderWidth: 1, borderColor: c.border },
+  tr: { flexDirection: "row", paddingVertical: 9, paddingHorizontal: 10 },
+  thRow: { backgroundColor: c.surfaceAlt },
+  trAlt: { backgroundColor: c.dark ? "rgba(255,255,255,0.02)" : "rgba(10,15,30,0.02)" },
+  td: { flex: 1, fontSize: 12, color: c.text, textAlign: "right", fontVariant: ["tabular-nums"] },
+  th: { fontWeight: "700", color: c.muted },
+  overall: { flexDirection: "row", alignItems: "center", gap: 14, borderRadius: 16, padding: 14, marginBottom: 12 },
+  overallScore: { fontSize: 40, fontWeight: "800", letterSpacing: -1 },
   overallLabel: { fontSize: 18, fontWeight: "800" },
-  checkRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
-  traceRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: colors.border },
-  feedback: { backgroundColor: colors.primarySoft, borderRadius: 18, padding: 16, marginTop: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
-  feedbackTitle: { flex: 1, fontWeight: "800", color: colors.primaryDark, fontSize: 15 },
-  thumb: { width: 46, height: 46, borderRadius: 14, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
-  disclaimer: { flexDirection: "row", gap: 8, marginTop: 20, paddingHorizontal: 4 },
-  disclaimerText: { flex: 1, color: colors.muted, fontSize: 11, lineHeight: 16 },
-  progressBadge: { width: 64, height: 64, borderRadius: 22, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
-  progressTitle: { fontSize: 22, fontWeight: "800", color: colors.text, marginTop: 14, marginBottom: 4, textAlign: "center" },
-  progressTrack: { height: 10, borderRadius: 5, backgroundColor: colors.primarySoft, alignSelf: "stretch", marginTop: 18, overflow: "hidden" },
-  progressFill: { height: 10, borderRadius: 5, backgroundColor: colors.primary },
+  traceRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: c.border },
+  feedback: { backgroundColor: c.surface, borderRadius: 20, borderWidth: 1, borderColor: c.border, padding: 16, marginTop: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  feedbackTitle: { flex: 1, fontWeight: "700", color: c.text, fontSize: 15 },
+  thumb: { width: 44, height: 44, borderRadius: 14, borderWidth: 1, borderColor: c.border, alignItems: "center", justifyContent: "center" },
+  progressBadge: { width: 60, height: 60, borderRadius: 20, backgroundColor: c.primarySoft, alignItems: "center", justifyContent: "center" },
+  progressTitle: { fontSize: 22, fontWeight: "800", color: c.text, marginTop: 14, marginBottom: 4, textAlign: "center", letterSpacing: -0.4 },
+  progressTrack: { height: 8, borderRadius: 4, backgroundColor: c.surfaceAlt, alignSelf: "stretch", marginTop: 20, overflow: "hidden" },
+  progressFill: { height: 8, borderRadius: 4, backgroundColor: c.primary },
   stepRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 8 },
-  stepIcon: { width: 34, height: 34, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  stepText: { fontSize: 15, color: colors.muted, fontWeight: "600" },
-});
+  stepIcon: { width: 32, height: 32, borderRadius: 11, alignItems: "center", justifyContent: "center" },
+  stepText: { fontSize: 15, color: c.muted },
+}));

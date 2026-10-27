@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { supabase } from "../lib/supabase";
-import { colors } from "../theme";
-import { PrimaryButton } from "../components/ui";
+import { makeStyles, useTheme } from "../theme";
+import { BackButton, Banner, Button, Input, Logo, Segmented } from "../components/ui";
 
 function friendlyAuthError(error) {
   const text = error.message || "";
@@ -15,14 +16,19 @@ function friendlyAuthError(error) {
   return text;
 }
 
-const FEATURES = [
-  { icon: "flash-outline", color: "#F59E0B", text: "A full stock briefing in about a minute" },
-  { icon: "document-text-outline", color: "#10B981", text: "Built from live quotes and SEC filings" },
-  { icon: "shield-checkmark-outline", color: "#60A5FA", text: "Compliance-reviewed and quality-scored" },
+const POINTS = [
+  { icon: "sparkles", text: "A full AI stock briefing in about a minute" },
+  { icon: "analytics", text: "Charts, technicals, options and backtests" },
+  { icon: "document-text", text: "Grounded in SEC filings, with citations" },
+  { icon: "shield-checkmark", text: "Guardrails and quality scores on every answer" },
 ];
 
-export default function LoginScreen() {
-  const [mode, setMode] = useState("signin");
+export default function LoginScreen({ initialMode = "signin", onBack }) {
+  const { c } = useTheme();
+  const s = useStyles();
+  const { width } = useWindowDimensions();
+  const wide = width >= 900;
+  const [mode, setMode] = useState(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -42,87 +48,104 @@ export default function LoginScreen() {
         : await supabase.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo } });
     setBusy(false);
     if (error) return setMessage({ type: "error", text: friendlyAuthError(error) });
-    if (mode === "signup" && !data.session) setMessage({ type: "info", text: "Almost there. Check your inbox to confirm your email, then sign in." });
+    if (mode === "signup" && !data.session) setMessage({ type: "success", text: "Almost there. Check your inbox to confirm your email, then sign in." });
   }
 
+  const form = (
+    <View style={s.formWrap}>
+      {onBack && <BackButton onPress={onBack} label="Home" />}
+      {!wide && <View style={{ marginTop: onBack ? 18 : 8 }}><Logo size={40} nameSize={24} /></View>}
+      <Text style={s.title}>{mode === "signin" ? "Welcome back" : "Create your account"}</Text>
+      <Text style={s.subtitle}>{mode === "signin" ? "Sign in to continue your research." : "Start researching stocks with your AI team."}</Text>
+
+      <View style={{ marginTop: 24 }}>
+        <Segmented options={[["signin", "Sign in"], ["signup", "Create account"]]} value={mode} onChange={(m) => { setMode(m); setMessage(null); }} />
+      </View>
+
+      <Text style={s.label}>Email</Text>
+      <Input icon="mail-outline" placeholder="you@example.com" autoCapitalize="none" autoComplete="email" keyboardType="email-address" value={email} onChangeText={setEmail} />
+
+      <Text style={s.label}>Password</Text>
+      <Input
+        icon="lock-closed-outline"
+        placeholder="At least 6 characters"
+        secureTextEntry={!showPassword}
+        autoComplete={mode === "signin" ? "current-password" : "new-password"}
+        value={password}
+        onChangeText={setPassword}
+        onSubmitEditing={submit}
+        right={
+          <Pressable onPress={() => setShowPassword(!showPassword)} hitSlop={10} accessibilityLabel={showPassword ? "Hide password" : "Show password"}>
+            <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color={c.muted} />
+          </Pressable>
+        }
+      />
+
+      {message && <Banner tone={message.type}>{message.text}</Banner>}
+
+      <Button title={mode === "signin" ? "Sign in" : "Create account"} iconRight="arrow-forward" onPress={submit} loading={busy} size="lg" style={{ marginTop: 22 }} />
+      <Text style={s.legal}>Educational research only, not investment advice.</Text>
+    </View>
+  );
+
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
-        <View style={styles.hero}>
-          <View style={styles.logoBadge}>
-            <Ionicons name="trending-up" size={30} color={colors.primary} />
-          </View>
-          <Text style={styles.logo}>FinSight</Text>
-          <Text style={styles.tagline}>Your AI research team for client conversations</Text>
-          <View style={{ marginTop: 20, gap: 10 }}>
-            {FEATURES.map((f) => (
-              <View key={f.text} style={styles.feature}>
-                <Ionicons name={f.icon} size={18} color={f.color} />
-                <Text style={styles.featureText}>{f.text}</Text>
+    <KeyboardAvoidingView style={s.fill} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      {wide ? (
+        <View style={[s.fill, { flexDirection: "row" }]}>
+          <LinearGradient colors={c.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.brandPanel}>
+            <View style={s.brandLogo}>
+              <Ionicons name="trending-up" size={22} color="#FFFFFF" />
+              <Text style={s.brandName}>FinSight</Text>
+            </View>
+            <View>
+              <Text style={s.brandTitle}>Your AI research team for every stock.</Text>
+              <View style={{ marginTop: 28, gap: 16 }}>
+                {POINTS.map((p) => (
+                  <View key={p.text} style={s.point}>
+                    <View style={s.pointIcon}><Ionicons name={`${p.icon}-outline`} size={18} color="#FFFFFF" /></View>
+                    <Text style={s.pointText}>{p.text}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+            <Text style={s.brandFoot}>Market data from Finnhub and Massive · Filings from SEC EDGAR</Text>
+          </LinearGradient>
+          <ScrollView style={s.fill} contentContainerStyle={s.formCenter} keyboardShouldPersistTaps="handled">{form}</ScrollView>
+        </View>
+      ) : (
+        <ScrollView style={s.fill} contentContainerStyle={{ flexGrow: 1, padding: 22, paddingTop: 12 }} keyboardShouldPersistTaps="handled">
+          {form}
+          <View style={s.pointsNarrow}>
+            {POINTS.map((p) => (
+              <View key={p.text} style={s.pointNarrow}>
+                <Ionicons name={`${p.icon}-outline`} size={16} color={c.primary} />
+                <Text style={s.pointNarrowText}>{p.text}</Text>
               </View>
             ))}
           </View>
-        </View>
-
-        <View style={styles.card}>
-          <View style={styles.tabs}>
-            {[["signin", "Sign in"], ["signup", "Create account"]].map(([key, label]) => (
-              <Pressable key={key} style={[styles.tab, mode === key && styles.tabActive]} onPress={() => { setMode(key); setMessage(null); }}>
-                <Text style={[styles.tabText, mode === key && styles.tabTextActive]}>{label}</Text>
-              </Pressable>
-            ))}
-          </View>
-
-          <Text style={styles.label}>Work email</Text>
-          <View style={styles.inputRow}>
-            <Ionicons name="mail-outline" size={18} color={colors.muted} />
-            <TextInput style={styles.input} placeholder="name@firm.com" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} />
-          </View>
-
-          <Text style={styles.label}>Password</Text>
-          <View style={styles.inputRow}>
-            <Ionicons name="lock-closed-outline" size={18} color={colors.muted} />
-            <TextInput style={styles.input} placeholder="At least 6 characters" secureTextEntry={!showPassword} value={password} onChangeText={setPassword} onSubmitEditing={submit} />
-            <Pressable onPress={() => setShowPassword(!showPassword)} hitSlop={10} accessibilityLabel={showPassword ? "Hide password" : "Show password"}>
-              <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color={colors.muted} />
-            </Pressable>
-          </View>
-
-          {message && (
-            <View style={[styles.message, { backgroundColor: message.type === "error" ? colors.redSoft : colors.primarySoft }]}>
-              <Ionicons name={message.type === "error" ? "alert-circle-outline" : "mail-unread-outline"} size={18} color={message.type === "error" ? colors.red : colors.primary} />
-              <Text style={{ flex: 1, color: message.type === "error" ? colors.red : colors.primaryDark }}>{message.text}</Text>
-            </View>
-          )}
-
-          <PrimaryButton
-            title={mode === "signin" ? "Sign in" : "Create account"}
-            icon={mode === "signin" ? "log-in-outline" : "person-add-outline"}
-            onPress={submit}
-            loading={busy}
-            style={{ marginTop: 18 }}
-          />
-        </View>
-      </ScrollView>
+        </ScrollView>
+      )}
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
-  hero: { backgroundColor: colors.primary, padding: 28, paddingTop: 40, paddingBottom: 60, borderBottomLeftRadius: 32, borderBottomRightRadius: 32 },
-  logoBadge: { width: 58, height: 58, borderRadius: 18, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" },
-  logo: { fontSize: 34, fontWeight: "800", color: colors.white, marginTop: 14 },
-  tagline: { fontSize: 16, color: "#C7D2FE", marginTop: 4 },
-  feature: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 12, padding: 10 },
-  featureText: { color: colors.white, fontSize: 14, flex: 1 },
-  card: { backgroundColor: colors.card, marginHorizontal: 20, marginTop: -36, borderRadius: 22, padding: 20, shadowColor: "#1E1B4B", shadowOpacity: 0.1, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 4, marginBottom: 30 },
-  tabs: { flexDirection: "row", backgroundColor: colors.bg, borderRadius: 12, padding: 4, marginBottom: 8 },
-  tab: { flex: 1, paddingVertical: 10, borderRadius: 9, alignItems: "center" },
-  tabActive: { backgroundColor: colors.card, shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 4, elevation: 1 },
-  tabText: { color: colors.muted, fontWeight: "600" },
-  tabTextActive: { color: colors.primary },
-  label: { fontWeight: "600", color: colors.text, marginTop: 14, marginBottom: 6 },
-  inputRow: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1.5, borderColor: colors.border, borderRadius: 14, paddingHorizontal: 14, backgroundColor: "#FAFAFF" },
-  input: { flex: 1, paddingVertical: 13, fontSize: 16, color: colors.text },
-  message: { flexDirection: "row", gap: 8, alignItems: "center", borderRadius: 12, padding: 12, marginTop: 14 },
-});
+const useStyles = makeStyles((c) => ({
+  fill: { flex: 1, backgroundColor: c.bg },
+  brandPanel: { width: "44%", maxWidth: 620, padding: 48, justifyContent: "space-between" },
+  brandLogo: { flexDirection: "row", alignItems: "center", gap: 10 },
+  brandName: { color: "#FFFFFF", fontSize: 20, fontWeight: "800" },
+  brandTitle: { color: "#FFFFFF", fontSize: 40, lineHeight: 46, fontWeight: "800", letterSpacing: -1, maxWidth: 460 },
+  point: { flexDirection: "row", alignItems: "center", gap: 12 },
+  pointIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" },
+  pointText: { color: "rgba(255,255,255,0.92)", fontSize: 16, flex: 1 },
+  brandFoot: { color: "rgba(255,255,255,0.7)", fontSize: 12 },
+  formCenter: { flexGrow: 1, justifyContent: "center", alignItems: "center", padding: 32 },
+  formWrap: { width: "100%", maxWidth: 420 },
+  title: { color: c.text, fontSize: 30, fontWeight: "800", letterSpacing: -0.8, marginTop: 22 },
+  subtitle: { color: c.textSecondary, fontSize: 15, marginTop: 6 },
+  label: { fontWeight: "600", color: c.text, marginTop: 18, marginBottom: 8, fontSize: 14 },
+  legal: { color: c.muted, fontSize: 12, marginTop: 16, textAlign: "center" },
+  pointsNarrow: { marginTop: 32, gap: 12, padding: 18, backgroundColor: c.surface, borderRadius: 20, borderWidth: 1, borderColor: c.border },
+  pointNarrow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  pointNarrowText: { color: c.textSecondary, fontSize: 14, flex: 1 },
+}));

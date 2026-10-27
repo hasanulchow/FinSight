@@ -1,17 +1,20 @@
 import { useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import Svg, { Defs, ClipPath, Line, Path, Rect, Text as SvgText } from "react-native-svg";
-import { colors } from "../theme";
+import { makeStyles, useTheme, alpha } from "../theme";
 
 const H = 220;
 const AXIS_W = 52;
-const fmt = (v) => `${v >= 0 ? "+" : "-"}$${Math.abs(v) >= 1000 ? `${(Math.abs(v) / 1000).toFixed(1)}k` : Math.abs(v).toFixed(0)}`;
+// Signed dollars; anything under 50 cents shows as $0 (never "-$0")
+const fmt = (v) => (Math.abs(v) < 0.5 ? "$0" : `${v > 0 ? "+" : "-"}$${Math.abs(v) >= 1000 ? `${(Math.abs(v) / 1000).toFixed(1)}k` : Math.abs(v).toFixed(0)}`);
 
 /**
  * Options payoff diagram: P/L at expiration (solid, green above zero / red below) and today (dashed),
  * with the spot price, breakevens and the expected-move range. Touch to read P/L at any price.
  */
 export default function PayoffChart({ curve = [], spot, breakevens = [], expectedMove }) {
+  const { c } = useTheme();
+  const styles = useStyles();
   const [width, setWidth] = useState(0);
   const [hover, setHover] = useState(null);
   const plotW = Math.max(0, width - AXIS_W);
@@ -37,6 +40,7 @@ export default function PayoffChart({ curve = [], spot, breakevens = [], expecte
     const nearest = curve.reduce((best, p) => (Math.abs(p.price - price) < Math.abs(best.price - price) ? p : best), curve[0]);
     setHover(nearest);
   };
+  const plColor = (v) => (Math.abs(v) < 0.5 ? c.text : v > 0 ? c.gain : c.loss);
   const shown = hover ?? curve.reduce((best, p) => (Math.abs(p.price - spot) < Math.abs(best.price - spot) ? p : best), curve[0] ?? {});
 
   return (
@@ -45,8 +49,8 @@ export default function PayoffChart({ curve = [], spot, breakevens = [], expecte
         <View style={styles.readout}>
           <Text style={styles.readoutLabel}>If {hover ? "price is" : "price stays at"} ${shown.price}</Text>
           <Text style={styles.readoutText}>
-            At expiration <Text style={{ color: shown.expiry >= 0 ? colors.green : colors.red, fontWeight: "800" }}>{fmt(shown.expiry)}</Text>
-            {"   "}Today <Text style={{ color: shown.today >= 0 ? colors.green : colors.red, fontWeight: "800" }}>{fmt(shown.today)}</Text>
+            At expiration <Text style={{ color: plColor(shown.expiry), fontWeight: "800" }}>{fmt(shown.expiry)}</Text>
+            {"   "}Today <Text style={{ color: plColor(shown.today), fontWeight: "800" }}>{fmt(shown.today)}</Text>
           </Text>
         </View>
       )}
@@ -66,39 +70,41 @@ export default function PayoffChart({ curve = [], spot, breakevens = [], expecte
               <ClipPath id="below"><Rect x={0} y={geo.zeroY} width={plotW} height={H - geo.zeroY} /></ClipPath>
             </Defs>
             {/* Expected-move band */}
-            {expectedMove && <Rect x={geo.x(expectedMove.low)} y={0} width={Math.max(0, geo.x(expectedMove.high) - geo.x(expectedMove.low))} height={H} fill="#EEF2FF" />}
+            {expectedMove && <Rect x={geo.x(expectedMove.low)} y={0} width={Math.max(0, geo.x(expectedMove.high) - geo.x(expectedMove.low))} height={H} fill={c.primarySoft} />}
             {/* Profit / loss shading */}
-            <Path d={geo.area} fill={colors.green} opacity={0.15} clipPath="url(#above)" />
-            <Path d={geo.area} fill={colors.red} opacity={0.15} clipPath="url(#below)" />
-            <Line x1={0} x2={plotW} y1={geo.zeroY} y2={geo.zeroY} stroke={colors.muted} strokeWidth={1} />
+            <Path d={geo.area} fill={c.gain} opacity={0.15} clipPath="url(#above)" />
+            <Path d={geo.area} fill={c.loss} opacity={0.15} clipPath="url(#below)" />
+            <Line x1={0} x2={plotW} y1={geo.zeroY} y2={geo.zeroY} stroke={c.muted} strokeWidth={1} />
             {geo.ticks.map((v, i) => (
-              <SvgText key={i} x={plotW + 4} y={geo.y(v) + 4} fontSize={10} fill={colors.muted}>{fmt(v)}</SvgText>
+              <SvgText key={i} x={plotW + 4} y={Math.max(10, geo.y(v) + 4)} fontSize={10} fill={c.muted}>{fmt(v)}</SvgText>
             ))}
-            <Path d={geo.today} stroke="#7C3AED" strokeWidth={1.6} strokeDasharray="5,4" fill="none" />
-            <Path d={geo.expiry} stroke={colors.text} strokeWidth={2.2} fill="none" />
+            <Path d={geo.today} stroke={c.hue("violet")} strokeWidth={1.6} strokeDasharray="5,4" fill="none" />
+            <Path d={geo.expiry} stroke={c.text} strokeWidth={2.2} fill="none" />
             {/* Spot and breakevens */}
-            {spot != null && <Line x1={geo.x(spot)} x2={geo.x(spot)} y1={0} y2={H} stroke={colors.primary} strokeWidth={1.2} />}
-            {spot != null && <SvgText x={geo.x(spot) + 3} y={12} fontSize={10} fill={colors.primary}>Now ${spot}</SvgText>}
+            {spot != null && <Line x1={geo.x(spot)} x2={geo.x(spot)} y1={0} y2={H} stroke={c.primary} strokeWidth={1.2} />}
+            {spot != null && <SvgText x={Math.min(geo.x(spot) + 3, plotW - 64)} y={24} fontSize={10} fill={c.primary}>Now ${spot}</SvgText>}
             {breakevens.map((b) => (
-              <Line key={b} x1={geo.x(b)} x2={geo.x(b)} y1={0} y2={H} stroke={colors.amber} strokeWidth={1} strokeDasharray="3,3" />
+              <Line key={b} x1={geo.x(b)} x2={geo.x(b)} y1={0} y2={H} stroke={c.warn} strokeWidth={1} strokeDasharray="3,3" />
             ))}
-            <SvgText x={0} y={H + 14} fontSize={10} fill={colors.muted}>${geo.pMin.toFixed(0)}</SvgText>
-            <SvgText x={plotW - 30} y={H + 14} fontSize={10} fill={colors.muted}>${geo.pMax.toFixed(0)}</SvgText>
-            {hover && <Line x1={geo.x(hover.price)} x2={geo.x(hover.price)} y1={0} y2={H} stroke={colors.text} strokeWidth={0.8} strokeDasharray="2,2" />}
+            <SvgText x={0} y={H + 14} fontSize={10} fill={c.muted}>${geo.pMin.toFixed(0)}</SvgText>
+            <SvgText x={plotW - 30} y={H + 14} fontSize={10} fill={c.muted}>${geo.pMax.toFixed(0)}</SvgText>
+            {hover && <Line x1={geo.x(hover.price)} x2={geo.x(hover.price)} y1={0} y2={H} stroke={c.text} strokeWidth={0.8} strokeDasharray="2,2" />}
           </Svg>
         )}
       </View>
       <View style={styles.legend}>
-        <Legend color={colors.text} label="At expiration" />
-        <Legend color="#7C3AED" label="Today (model)" dashed />
-        <Legend color={colors.amber} label="Breakeven" dashed />
-        {expectedMove && <Legend color="#C7D2FE" label="Expected move" thick />}
+        <Legend color={c.text} label="At expiration" />
+        <Legend color={c.hue("violet")} label="Today (model)" dashed />
+        <Legend color={c.warn} label="Breakeven" dashed />
+        {expectedMove && <Legend color={alpha(c.primary, 0.3)} label="Expected move" thick />}
       </View>
     </View>
   );
 }
 
 function Legend({ color, label, thick }) {
+  const { c } = useTheme();
+  const styles = useStyles();
   return (
     <View style={styles.legendItem}>
       <View style={{ width: 14, height: thick ? 8 : 3, borderRadius: 2, backgroundColor: color }} />
@@ -107,11 +113,11 @@ function Legend({ color, label, thick }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   readout: { marginBottom: 6 },
-  readoutLabel: { color: colors.muted, fontSize: 12 },
-  readoutText: { color: colors.text, fontSize: 13, marginTop: 2 },
+  readoutLabel: { color: c.muted, fontSize: 12 },
+  readoutText: { color: c.text, fontSize: 13, marginTop: 2 },
   legend: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 4 },
   legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
-  legendText: { color: colors.muted, fontSize: 11 },
-});
+  legendText: { color: c.muted, fontSize: 11 },
+}));

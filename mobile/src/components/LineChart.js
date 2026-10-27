@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import Svg, { Line, Path, Text as SvgText } from "react-native-svg";
-import { colors } from "../theme";
+import { makeStyles, useTheme, alpha } from "../theme";
 
-export const SERIES_COLORS = ["#4F46E5", "#F59E0B", "#10B981", "#E11D48", "#0EA5E9"];
+/** Series palette for the active theme. */
+export const seriesColors = (c) => [c.primary, c.hue("amber"), c.hue("emerald"), c.hue("rose"), c.hue("sky")];
 const AXIS_W = 46;
 
 /**
@@ -12,6 +13,9 @@ const AXIS_W = 46;
  * format(v) formats values; zero draws a baseline at 0.
  */
 export default function LineChart({ data = [], series = [], height = 200, format = (v) => v.toFixed(1), zero = false, xLabel = (x) => String(x) }) {
+  const { c } = useTheme();
+  const styles = useStyles();
+  const SERIES_COLORS = seriesColors(c);
   const [width, setWidth] = useState(0);
   const [hover, setHover] = useState(null);
   const plotW = Math.max(0, width - AXIS_W);
@@ -74,17 +78,17 @@ export default function LineChart({ data = [], series = [], height = 200, format
         {geo && (
           <Svg width={width} height={height}>
             {geo.ticks.map((v, i) => (
-              <Line key={`g${i}`} x1={0} x2={plotW} y1={geo.y(v)} y2={geo.y(v)} stroke={colors.border} strokeWidth={1} />
+              <Line key={`g${i}`} x1={0} x2={plotW} y1={geo.y(v)} y2={geo.y(v)} stroke={c.border} strokeWidth={1} />
             ))}
             {geo.ticks.map((v, i) => (
-              <SvgText key={`t${i}`} x={plotW + 4} y={geo.y(v) + 4} fontSize={10} fill={colors.muted}>{format(v)}</SvgText>
+              <SvgText key={`t${i}`} x={plotW + 4} y={Math.max(10, geo.y(v) + 4)} fontSize={10} fill={c.muted}>{format(v)}</SvgText>
             ))}
-            {zero && <Line x1={0} x2={plotW} y1={geo.y(0)} y2={geo.y(0)} stroke={colors.muted} strokeWidth={1} strokeDasharray="4,3" />}
+            {zero && <Line x1={0} x2={plotW} y1={geo.y(0)} y2={geo.y(0)} stroke={c.muted} strokeWidth={1} strokeDasharray="4,3" />}
             {geo.paths.map((p, i) => (p.fillPath ? <Path key={`f${p.key}`} d={p.fillPath} fill={p.color ?? SERIES_COLORS[i % SERIES_COLORS.length]} opacity={0.12} /> : null))}
             {geo.paths.map((p, i) => (
               <Path key={p.key} d={p.d} stroke={p.color ?? SERIES_COLORS[i % SERIES_COLORS.length]} strokeWidth={p.width ?? 2} strokeDasharray={p.dashed ? "5,4" : undefined} fill="none" />
             ))}
-            {hover != null && <Line x1={geo.x(hover)} x2={geo.x(hover)} y1={0} y2={height} stroke={colors.text} strokeWidth={0.8} strokeDasharray="2,2" />}
+            {hover != null && <Line x1={geo.x(hover)} x2={geo.x(hover)} y1={0} y2={height} stroke={c.text} strokeWidth={0.8} strokeDasharray="2,2" />}
           </Svg>
         )}
       </View>
@@ -100,12 +104,12 @@ export default function LineChart({ data = [], series = [], height = 200, format
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   readout: { marginBottom: 6 },
-  readoutX: { color: colors.muted, fontSize: 12 },
+  readoutX: { color: c.muted, fontSize: 12 },
   readoutRow: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 2 },
   readoutVal: { fontWeight: "800", fontSize: 13 },
   legend: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 8 },
   legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
-  legendText: { color: colors.muted, fontSize: 11 },
-});
+  legendText: { color: c.muted, fontSize: 11 },
+}));

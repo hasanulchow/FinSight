@@ -4,7 +4,7 @@
     "slug": "finsight",
     "version": "1.1.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "scheme": "finsight",
     "ios": {
       "supportsTablet": true,
