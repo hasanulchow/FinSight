@@ -177,8 +177,10 @@ export function technicalSnapshot(bars) {
 
   const golden = recentCross(s50, s200, 1, 20);
   const death = recentCross(s50, s200, -1, 20);
-  const macdUp = recentCross(m.line, m.signal, 1, 5);
-  const macdDown = recentCross(m.line, m.signal, -1, 5);
+  // If MACD whipsawed both ways within the window, only the most recent cross counts
+  let macdUp = recentCross(m.line, m.signal, 1, 5);
+  let macdDown = recentCross(m.line, m.signal, -1, 5);
+  if (macdUp >= 0 && macdDown >= 0) macdUp > macdDown ? (macdDown = -1) : (macdUp = -1);
   const sma50Slope = s50[n] != null && s50[n - 20] != null ? ((s50[n] - s50[n - 20]) / s50[n - 20]) * 100 : null;
   const obvSlope = o[n] - o[Math.max(0, n - 20)];
   const volRatio = vol20[n] ? bars[n].v / vol20[n] : null;

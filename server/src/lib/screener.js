@@ -137,7 +137,7 @@ export async function parseQuery(query) {
     effort: "low",
     schema: filterSchema,
     system: `You convert a stock screening request into structured filters. Fields and units:\n${Object.entries(NUMERIC_FIELDS).map(([k, v]) => `- ${k}: ${v}`).join("\n")}
-Interpret common phrases: "oversold" = rsi14 < 30, "overbought" = rsi14 > 70, "cheap"/"value" = pe < 15 (and pe > 0), "high dividend" = dividend_yield > 3,
+Interpret common phrases: "oversold" = rsi14 < 30, "overbought" = rsi14 > 70, "cheap"/"value" = pe < 15 (and pe > 0), "dividend stocks"/"pays a dividend" = dividend_yield > 1, "high dividend" = dividend_yield > 3,
 "large cap" = market_cap_b > 100, "growth" = revenue_growth > 15, "profitable" = net_margin > 0, "near highs" = pct_from_52w_high > -5, "beaten down" = pct_from_52w_high < -25.
 Only use fields from the list. Don't add conditions the user didn't ask for.`,
     prompt: query,
