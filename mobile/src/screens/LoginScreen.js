@@ -3,8 +3,10 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, useWindowD
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { supabase } from "../lib/supabase";
-import { makeStyles, useTheme } from "../theme";
-import { BackButton, Banner, Button, Input, Logo, Segmented } from "../components/ui";
+import { makeStyles, useTheme, font } from "../theme";
+import { BackButton, Banner, Button, Input, Segmented } from "../components/ui";
+import { Logo, LogoGlyph } from "../components/Brand";
+import NavIcon from "../components/NavIcon";
 
 function friendlyAuthError(error) {
   const text = error.message || "";
@@ -17,10 +19,10 @@ function friendlyAuthError(error) {
 }
 
 const POINTS = [
-  { icon: "sparkles", text: "A full AI stock briefing in about a minute" },
-  { icon: "analytics", text: "Charts, technicals, options and backtests" },
-  { icon: "document-text", text: "Grounded in SEC filings, with citations" },
-  { icon: "shield-checkmark", text: "Guardrails and quality scores on every answer" },
+  { icon: "today", text: "A morning brief on every stock you follow" },
+  { icon: "copilot", text: "An AI Copilot that shows its sources" },
+  { icon: "trade", text: "Practice trading with $100,000" },
+  { icon: "journal", text: "A journal and coach that fix costly habits" },
 ];
 
 export default function LoginScreen({ initialMode = "signin", onBack, onOpenLegal }) {
@@ -56,7 +58,7 @@ export default function LoginScreen({ initialMode = "signin", onBack, onOpenLega
       {onBack && <BackButton onPress={onBack} label="Home" />}
       {!wide && <View style={{ marginTop: onBack ? 18 : 8 }}><Logo size={40} nameSize={24} /></View>}
       <Text style={s.title}>{mode === "signin" ? "Welcome back" : "Create your account"}</Text>
-      <Text style={s.subtitle}>{mode === "signin" ? "Sign in to continue your research." : "Start researching stocks with your AI team."}</Text>
+      <Text style={s.subtitle}>{mode === "signin" ? "Sign in to your trading desk." : "Free to start. No credit card needed."}</Text>
 
       <View style={{ marginTop: 24 }}>
         <Segmented options={[["signin", "Sign in"], ["signup", "Create account"]]} value={mode} onChange={(m) => { setMode(m); setMessage(null); }} />
@@ -86,9 +88,9 @@ export default function LoginScreen({ initialMode = "signin", onBack, onOpenLega
       <Button title={mode === "signin" ? "Sign in" : "Create account"} iconRight="arrow-forward" onPress={submit} loading={busy} size="lg" style={{ marginTop: 22 }} />
       <Text style={s.legal}>
         {mode === "signup" ? "By creating an account you agree to the " : "Educational research only, not investment advice. "}
-        <Text style={{ fontWeight: "700" }} onPress={() => onOpenLegal?.("terms")}>Terms</Text>,{" "}
-        <Text style={{ fontWeight: "700" }} onPress={() => onOpenLegal?.("privacy")}>Privacy Policy</Text> and{" "}
-        <Text style={{ fontWeight: "700" }} onPress={() => onOpenLegal?.("disclaimer")}>Risk Disclaimer</Text>.
+        <Text style={{ fontWeight: "700", fontFamily: font("700") }} onPress={() => onOpenLegal?.("terms")}>Terms</Text>,{" "}
+        <Text style={{ fontWeight: "700", fontFamily: font("700") }} onPress={() => onOpenLegal?.("privacy")}>Privacy Policy</Text> and{" "}
+        <Text style={{ fontWeight: "700", fontFamily: font("700") }} onPress={() => onOpenLegal?.("disclaimer")}>Risk Disclaimer</Text>.
       </Text>
     </View>
   );
@@ -97,23 +99,24 @@ export default function LoginScreen({ initialMode = "signin", onBack, onOpenLega
     <KeyboardAvoidingView style={s.fill} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       {wide ? (
         <View style={[s.fill, { flexDirection: "row" }]}>
-          <LinearGradient colors={c.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.brandPanel}>
-            <View style={s.brandLogo}>
-              <Ionicons name="trending-up" size={22} color="#FFFFFF" />
-              <Text style={s.brandName}>FinSight</Text>
+          <LinearGradient colors={["#4F46E5", "#7C3AED", "#4C1D95"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.brandPanel}>
+            <View style={s.brandGlyph} pointerEvents="none">
+              <LogoGlyph size={420} color="rgba(255,255,255,0.07)" accent="rgba(34,211,238,0.22)" />
             </View>
+            <Logo size={34} tone="light" />
             <View>
-              <Text style={s.brandTitle}>Your AI research team for every stock.</Text>
-              <View style={{ marginTop: 28, gap: 16 }}>
+              <Text style={s.brandTitle}>Your AI trading desk.</Text>
+              <Text style={s.brandLead}>Research, practice and trade with a team of AI analysts at your side.</Text>
+              <View style={{ marginTop: 30, gap: 14 }}>
                 {POINTS.map((p) => (
                   <View key={p.text} style={s.point}>
-                    <View style={s.pointIcon}><Ionicons name={`${p.icon}-outline`} size={18} color="#FFFFFF" /></View>
+                    <View style={s.pointIcon}><NavIcon name={p.icon} size={19} color="#FFFFFF" /></View>
                     <Text style={s.pointText}>{p.text}</Text>
                   </View>
                 ))}
               </View>
             </View>
-            <Text style={s.brandFoot}>Market data from Finnhub and Massive · Filings from SEC EDGAR</Text>
+            <Text style={s.brandFoot}>Filings from SEC EDGAR · Market data from Finnhub and Massive · Educational, not investment advice</Text>
           </LinearGradient>
           <ScrollView style={s.fill} contentContainerStyle={s.formCenter} keyboardShouldPersistTaps="handled">{form}</ScrollView>
         </View>
@@ -123,7 +126,7 @@ export default function LoginScreen({ initialMode = "signin", onBack, onOpenLega
           <View style={s.pointsNarrow}>
             {POINTS.map((p) => (
               <View key={p.text} style={s.pointNarrow}>
-                <Ionicons name={`${p.icon}-outline`} size={16} color={c.primary} />
+                <NavIcon name={p.icon} size={18} color={c.primary} active />
                 <Text style={s.pointNarrowText}>{p.text}</Text>
               </View>
             ))}
@@ -136,17 +139,17 @@ export default function LoginScreen({ initialMode = "signin", onBack, onOpenLega
 
 const useStyles = makeStyles((c) => ({
   fill: { flex: 1, backgroundColor: c.bg },
-  brandPanel: { width: "44%", maxWidth: 620, padding: 48, justifyContent: "space-between" },
-  brandLogo: { flexDirection: "row", alignItems: "center", gap: 10 },
-  brandName: { color: "#FFFFFF", fontSize: 20, fontWeight: "800" },
-  brandTitle: { color: "#FFFFFF", fontSize: 40, lineHeight: 46, fontWeight: "800", letterSpacing: -1, maxWidth: 460 },
+  brandPanel: { width: "44%", maxWidth: 620, padding: 48, justifyContent: "space-between", overflow: "hidden" },
+  brandGlyph: { position: "absolute", right: -120, bottom: -110 },
+  brandTitle: { color: "#FFFFFF", fontSize: 44, lineHeight: 49, fontWeight: "800", letterSpacing: -1.6, maxWidth: 460 },
+  brandLead: { color: "rgba(255,255,255,0.82)", fontSize: 17, lineHeight: 26, marginTop: 14, maxWidth: 420 },
   point: { flexDirection: "row", alignItems: "center", gap: 12 },
   pointIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" },
   pointText: { color: "rgba(255,255,255,0.92)", fontSize: 16, flex: 1 },
   brandFoot: { color: "rgba(255,255,255,0.7)", fontSize: 12 },
   formCenter: { flexGrow: 1, justifyContent: "center", alignItems: "center", padding: 32 },
   formWrap: { width: "100%", maxWidth: 420 },
-  title: { color: c.text, fontSize: 30, fontWeight: "800", letterSpacing: -0.8, marginTop: 22 },
+  title: { color: c.text, fontSize: 32, fontWeight: "800", letterSpacing: -1.1, marginTop: 22 },
   subtitle: { color: c.textSecondary, fontSize: 15, marginTop: 6 },
   label: { fontWeight: "600", color: c.text, marginTop: 18, marginBottom: 8, fontSize: 14 },
   legal: { color: c.muted, fontSize: 12, marginTop: 16, textAlign: "center" },

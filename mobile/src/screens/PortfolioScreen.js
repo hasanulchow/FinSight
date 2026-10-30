@@ -3,7 +3,7 @@ import { Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput
 import Svg, { Circle } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../lib/api";
-import { formatMoney, makeStyles, useTheme } from "../theme";
+import { formatMoney, makeStyles, useTheme, font } from "../theme";
 import BenchmarkCard from "../components/BenchmarkCard";
 import BrokerCard from "../components/BrokerCard";
 import { UpgradeCard } from "../components/Upgrade";
@@ -180,7 +180,7 @@ export default function PortfolioScreen({ onOpenStock, onOpenTax }) {
                 </View>
                 <View style={s.holdingTop}>
                   <Text style={s.muted}>{p.shares} sh · {p.weight}%</Text>
-                  <Text style={{ color: (p.change_pct ?? 0) >= 0 ? c.gain : c.loss, fontWeight: "700", fontSize: 13 }}>{p.change_pct >= 0 ? "+" : ""}{p.change_pct}%</Text>
+                  <Text style={{ color: (p.change_pct ?? 0) >= 0 ? c.gain : c.loss, fontWeight: "700", fontFamily: font("700"), fontSize: 13 }}>{p.change_pct >= 0 ? "+" : ""}{p.change_pct}%</Text>
                 </View>
                 <View style={s.weightTrack}><View style={[s.weightFill, { width: `${Math.min(100, p.weight)}%` }]} /></View>
                 <View style={s.tags}>
@@ -224,7 +224,7 @@ function Donut({ sectors, size = 132 }) {
         })}
       </Svg>
       <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}>
-        <Text style={{ color: c.text, fontSize: 20, fontWeight: "800" }}>{sectors.length}</Text>
+        <Text style={{ color: c.text, fontSize: 20, fontWeight: "800", fontFamily: font("800") }}>{sectors.length}</Text>
         <Text style={{ color: c.muted, fontSize: 11 }}>sectors</Text>
       </View>
     </View>

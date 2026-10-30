@@ -2,6 +2,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { makeStyles, useTheme } from "../theme";
 import { PageHeader } from "../components/ui";
+import NavIcon, { hasNavIcon } from "../components/NavIcon";
 
 /** Phone-only menu for the sections that don't fit in the tab bar. */
 export default function MoreScreen({ items, onSelect, unread }) {
@@ -16,7 +17,7 @@ export default function MoreScreen({ items, onSelect, unread }) {
           return (
             <Pressable key={it.key} onPress={() => onSelect(it.key)} style={({ pressed }) => [s.row, i > 0 && s.divider, pressed && { backgroundColor: c.surfaceAlt }]} accessibilityRole="button">
               <View style={[s.icon, { backgroundColor: sec.soft }]}>
-                <Ionicons name={it.icon ? `${it.icon}-outline` : sec.icon} size={19} color={sec.color} />
+                {hasNavIcon(it.key) ? <NavIcon name={it.key} size={21} color={sec.color} active /> : <Ionicons name={sec.icon} size={19} color={sec.color} />}
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.title}>{it.label}</Text>

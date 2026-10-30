@@ -2,28 +2,54 @@
   "expo": {
     "name": "FinSight",
     "slug": "finsight",
-    "version": "1.5.0",
+    "version": "1.7.0",
     "orientation": "default",
     "userInterfaceStyle": "automatic",
     "scheme": "finsight",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.finsight.app",
-      "requireFullScreen": false
+      "requireFullScreen": false,
+      "icon": "./assets/icon.png"
     },
     "android": {
       "package": "com.finsight.app",
       "adaptiveIcon": {
-        "backgroundColor": "#4F46E5"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#5B3BE8"
       }
     },
     "plugins": [
       [
         "expo-notifications",
         {
-          "color": "#4F46E5"
+          "color": "#5B3BE8",
+          "icon": "./assets/adaptive-icon.png"
+        }
+      ],
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 120,
+          "resizeMode": "contain",
+          "backgroundColor": "#F5F6FA",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#06080F"
+          }
         }
       ]
-    ]
+    ],
+    "icon": "./assets/icon.png",
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "name": "FinSight: AI stock research and trading",
+      "shortName": "FinSight",
+      "description": "AI research team, practice trading and a trading coach for investors.",
+      "themeColor": "#5B3BE8",
+      "backgroundColor": "#06080F"
+    }
   }
 }

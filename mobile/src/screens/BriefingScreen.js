@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Linking, Pressable, ScrollView, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../lib/api";
-import { formatMoney, makeStyles, scoreLabel, useTheme } from "../theme";
+import { formatMoney, makeStyles, scoreLabel, useTheme, font } from "../theme";
 import { BackButton, Bullets, Button, Disclaimer, Pill, ScoreBar, SectionCard, Stat, TickerAvatar } from "../components/ui";
 import TechnicalsCard from "../components/TechnicalsCard";
 import EventsCard from "../components/EventsCard";
@@ -171,7 +171,7 @@ export default function BriefingScreen({ id, onBack }) {
         {b.risks.top_risks.map((r, i) => (
           <View key={r.title} style={s.risk}>
             <View style={s.riskHead}>
-              <View style={[s.riskNum, { backgroundColor: sections.risks.soft }]}><Text style={{ color: sections.risks.color, fontWeight: "800", fontSize: 12 }}>{i + 1}</Text></View>
+              <View style={[s.riskNum, { backgroundColor: sections.risks.soft }]}><Text style={{ color: sections.risks.color, fontWeight: "800", fontFamily: font("800"), fontSize: 12 }}>{i + 1}</Text></View>
               <Text style={s.riskTitle}>{r.title}</Text>
               <Pill text={r.category} color={theme.riskColor(r.category)} />
             </View>
@@ -245,7 +245,7 @@ function Progress({ onBack, briefing }) {
         <Text style={s.progressTitle}>Researching {briefing?.ticker ?? ""}</Text>
         <Text style={[s.muted, { textAlign: "center" }]}>Usually about a minute. You can leave and come back.</Text>
         <View style={s.progressTrack}><View style={[s.progressFill, { width: `${pct}%` }]} /></View>
-        <Text style={[s.small, { color: c.primary, fontWeight: "700" }]}>{pct}%</Text>
+        <Text style={[s.small, { color: c.primary, fontWeight: "700", fontFamily: font("700") }]}>{pct}%</Text>
       </View>
       <View style={[s.hero, { marginTop: 12 }]}>
         {STEPS.map((st, i) => {
@@ -256,7 +256,7 @@ function Progress({ onBack, briefing }) {
               <View style={[s.stepIcon, { backgroundColor: done ? c.gainSoft : active ? c.primarySoft : c.surfaceAlt }]}>
                 {done ? <Ionicons name="checkmark" size={17} color={c.gain} /> : active ? <ActivityIndicator size="small" color={c.primary} /> : <Ionicons name={st.icon} size={15} color={c.muted} />}
               </View>
-              <Text style={[s.stepText, done && { color: c.textSecondary }, active && { color: c.text, fontWeight: "700" }]}>{st.label}</Text>
+              <Text style={[s.stepText, done && { color: c.textSecondary }, active && { color: c.text, fontWeight: "700", fontFamily: font("700") }]}>{st.label}</Text>
             </View>
           );
         })}
@@ -306,7 +306,7 @@ function Trend({ trend }) {
   return (
     <View style={s.trendRow}>
       <View style={[s.trendIcon, { backgroundColor: c.soft(t.color) }]}><Ionicons name={t.icon} size={14} color={t.color} /></View>
-      <Text style={[s.body, { flex: 1 }]}><Text style={{ fontWeight: "700" }}>{trend.metric}: </Text>{trend.detail}</Text>
+      <Text style={[s.body, { flex: 1 }]}><Text style={{ fontWeight: "700", fontFamily: font("700") }}>{trend.metric}: </Text>{trend.detail}</Text>
     </View>
   );
 }
@@ -324,7 +324,7 @@ function FinancialTable({ financials }) {
       </View>
       {rows.map(([label, key], i) => (
         <View key={key} style={[s.tr, i % 2 === 1 && s.trAlt]}>
-          <Text style={[s.td, { flex: 1.6, textAlign: "left", fontWeight: "600" }]}>{label}</Text>
+          <Text style={[s.td, { flex: 1.6, textAlign: "left", fontWeight: "600", fontFamily: font("600") }]}>{label}</Text>
           {years.map((y) => {
             const v = financials[key].find((p) => p.year === y)?.value;
             return <Text key={y} style={s.td}>{v == null ? "–" : key === "epsDiluted" ? `$${v.toFixed(2)}` : formatMoney(v)}</Text>;

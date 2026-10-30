@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Modal, Pressable, ScrollView, Switch, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../lib/api";
-import { makeStyles, useTheme } from "../theme";
+import { makeStyles, useTheme, font } from "../theme";
 import { ErrorNotice } from "./Upgrade";
 import { Button, Chip, Input } from "./ui";
 
@@ -86,7 +86,7 @@ export default function AlertSheet({ ticker, price, visible, onClose, onCreated 
           {selected.needs && (
             <View style={{ marginTop: 18 }}>
               <Text style={s.label}>{selected.needs === "price" ? "Price ($)" : selected.needs === "rsi" ? "RSI level" : "Multiple of average volume"}</Text>
-              <Input keyboardType="decimal-pad" value={threshold} onChangeText={setThreshold} placeholder={selected.placeholder ?? (price ? String(price) : "")} inputStyle={{ fontSize: 18, fontWeight: "700" }} />
+              <Input keyboardType="decimal-pad" value={threshold} onChangeText={setThreshold} placeholder={selected.placeholder ?? (price ? String(price) : "")} inputStyle={{ fontSize: 18, fontWeight: "700", fontFamily: font("700") }} />
             </View>
           )}
           <View style={s.repeatRow}>

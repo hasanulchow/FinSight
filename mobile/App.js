@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold } from "@expo-google-fonts/inter";
 import { ActivityIndicator, Platform, Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
@@ -33,6 +34,7 @@ import OnboardingScreen from "./src/screens/OnboardingScreen";
 import ShareScreen from "./src/screens/ShareScreen";
 import TradeScreen from "./src/screens/TradeScreen";
 import { UpgradeContext } from "./src/components/Upgrade";
+import NavIcon from "./src/components/NavIcon";
 
 // The sidebar (tablets and desktop) shows every section; the phone tab bar shows the first four plus "More"
 const SECTIONS = [
@@ -48,6 +50,11 @@ const SECTIONS = [
   { key: "tax", label: "Tax center", icon: "receipt", section: "redflags", sub: "Realized gains, wash sales, harvesting" },
   { key: "account", label: "Account", icon: "person-circle", section: "account", sub: "Plan, invites, settings and privacy" },
 ];
+const GROUPS = [
+  ["Home", ["today", "copilot", "trade", "portfolio"]],
+  ["Research", ["research", "markets", "screener", "journal"]],
+  ["Account", ["alerts", "tax", "account", "admin"]],
+];
 const ADMIN = { key: "admin", label: "Admin", icon: "stats-chart", section: "benchmark", sub: "Users, revenue and AI cost" };
 const PHONE_TABS = [...SECTIONS.slice(0, 4), { key: "more", label: "More", icon: "grid" }];
 
@@ -56,6 +63,14 @@ const params = Platform.OS === "web" && typeof window !== "undefined" ? new URLS
 const forcedScheme = params?.get("theme") === "dark" ? "dark" : params?.get("theme") === "light" ? "light" : undefined;
 
 export default function App() {
+  // Inter for all text. Render once loaded (or after 3s, falling back to the system font if a load fails)
+  const [fontsLoaded, fontError] = useFonts({ Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold });
+  const [timedOut, setTimedOut] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setTimedOut(true), 3000);
+    return () => clearTimeout(t);
+  }, []);
+  if (!fontsLoaded && !fontError && !timedOut) return null;
   return (
     <SafeAreaProvider>
       <ThemeProvider scheme={forcedScheme}>
@@ -230,18 +245,28 @@ function Shell() {
       <View style={[s.fill, { flexDirection: "row" }]}>
         <StatusBar style={c.dark ? "light" : "dark"} />
         <SafeAreaView edges={["top", "left", "bottom"]} style={[s.sidebar, width < 1024 && { width: 216 }]}>
-          <View style={{ paddingHorizontal: 10, paddingVertical: 6 }}>
-            <Logo size={34} />
+          <View style={{ paddingHorizontal: 8, paddingVertical: 4 }}>
+            <Logo size={32} />
           </View>
-          <ScrollView style={{ marginTop: 20 }} contentContainerStyle={{ gap: 2 }} showsVerticalScrollIndicator={false}>
-            {sections.map((t) => {
-              const inSection = tab === t.key;
+          <ScrollView style={{ marginTop: 18 }} showsVerticalScrollIndicator={false}>
+            {GROUPS.map(([group, keys]) => {
+              const items = keys.map((k) => sections.find((x) => x.key === k)).filter(Boolean);
+              if (!items.length) return null;
               return (
-                <Pressable key={t.key} onPress={() => goTab(t.key)} style={({ hovered }) => [s.navItem, inSection && s.navActive, hovered && !inSection && s.navHover]} accessibilityRole="tab" accessibilityState={{ selected: inSection }}>
-                  <Ionicons name={inSection ? t.icon : `${t.icon}-outline`} size={19} color={inSection ? c.primary : c.textSecondary} />
-                  <Text style={[s.navText, inSection && { color: c.text }]}>{t.label}</Text>
-                  {t.key === "alerts" && unread > 0 && <View style={s.navBadge}><Text style={s.badgeText}>{unread > 9 ? "9+" : unread}</Text></View>}
-                </Pressable>
+                <View key={group} style={{ marginBottom: 14 }}>
+                  <Text style={s.navGroup}>{group}</Text>
+                  {items.map((t) => {
+                    const inSection = tab === t.key;
+                    return (
+                      <Pressable key={t.key} onPress={() => goTab(t.key)} style={({ hovered }) => [s.navItem, inSection && s.navActive, hovered && !inSection && s.navHover]} accessibilityRole="tab" accessibilityState={{ selected: inSection }}>
+                        {inSection && <View style={s.navBar} />}
+                        <NavIcon name={t.key} size={20} color={inSection ? c.primary : c.textSecondary} active={inSection} />
+                        <Text style={[s.navText, inSection && { color: c.text }]}>{t.label}</Text>
+                        {t.key === "alerts" && unread > 0 && <View style={s.navBadge}><Text style={s.badgeText}>{unread > 9 ? "9+" : unread}</Text></View>}
+                      </Pressable>
+                    );
+                  })}
+                </View>
               );
             })}
           </ScrollView>
@@ -273,7 +298,7 @@ function Shell() {
           return (
             <Pressable key={t.key} style={s.tab} onPress={() => goTab(t.key)} accessibilityRole="tab" accessibilityState={{ selected: inSection }} accessibilityLabel={t.label}>
               <View style={[s.tabIconWrap, inSection && { backgroundColor: c.primarySoft }]}>
-                <Ionicons name={inSection ? t.icon : `${t.icon}-outline`} size={21} color={inSection ? c.primary : c.muted} />
+                <NavIcon name={t.key} size={22} color={inSection ? c.primary : c.muted} active={inSection} />
                 {t.key === "more" && unread > 0 && <View style={s.badge}><Text style={s.badgeText}>{unread > 9 ? "9+" : unread}</Text></View>}
               </View>
               <Text style={[s.tabLabel, inSection && { color: c.primary }]}>{t.label}</Text>
@@ -290,20 +315,22 @@ const useStyles = makeStyles((c) => ({
   contentOuter: { flex: 1, backgroundColor: c.bg },
   content: { flex: 1, width: "100%", alignSelf: "center" },
   contentWide: { maxWidth: 1040, paddingHorizontal: 12 },
-  sidebar: { width: 248, backgroundColor: c.surface, borderRightWidth: 1, borderRightColor: c.border, padding: 16, paddingTop: 22 },
-  navItem: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12 },
+  sidebar: { width: 248, backgroundColor: c.surface, borderRightWidth: 1, borderRightColor: c.border, padding: 14, paddingTop: 20 },
+  navGroup: { color: c.muted, fontSize: 11, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase", paddingHorizontal: 12, marginBottom: 4 },
+  navItem: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 12 },
+  navBar: { position: "absolute", left: -14, top: 8, bottom: 8, width: 3, borderTopRightRadius: 3, borderBottomRightRadius: 3, backgroundColor: c.primary },
   navActive: { backgroundColor: c.primarySoft },
   navHover: { backgroundColor: c.surfaceAlt },
-  navText: { color: c.textSecondary, fontWeight: "600", fontSize: 15, flex: 1 },
+  navText: { color: c.textSecondary, fontWeight: "600", fontSize: 14.5, flex: 1, letterSpacing: -0.1 },
   navBadge: { backgroundColor: c.loss, borderRadius: 9, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 5 },
   account: { flexDirection: "row", alignItems: "center", gap: 10, padding: 10, borderRadius: 14, backgroundColor: c.surfaceAlt, marginTop: 12 },
   avatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: c.primarySoft, alignItems: "center", justifyContent: "center" },
   avatarText: { color: c.primary, fontWeight: "800" },
   accountEmail: { flex: 1, color: c.textSecondary, fontSize: 13 },
-  tabBar: { flexDirection: "row", backgroundColor: c.surface, borderTopWidth: 1, borderTopColor: c.border, paddingTop: 6 },
-  tab: { flex: 1, alignItems: "center", paddingBottom: 6, gap: 2 },
-  tabIconWrap: { width: 46, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
-  tabLabel: { fontSize: 11, fontWeight: "600", color: c.muted },
+  tabBar: { flexDirection: "row", backgroundColor: c.surface, borderTopWidth: 1, borderTopColor: c.border, paddingTop: 7, shadowColor: c.shadow, shadowOpacity: c.dark ? 0.4 : 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: -2 }, elevation: 12 },
+  tab: { flex: 1, alignItems: "center", paddingBottom: 6, gap: 3 },
+  tabIconWrap: { width: 52, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
+  tabLabel: { fontSize: 11, fontWeight: "600", color: c.muted, letterSpacing: 0.1 },
   badge: { position: "absolute", top: -2, right: 2, backgroundColor: c.loss, borderRadius: 9, minWidth: 18, height: 18, alignItems: "center", justifyContent: "center", paddingHorizontal: 4, borderWidth: 2, borderColor: c.surface },
   badgeText: { color: "#FFFFFF", fontSize: 10, fontWeight: "800" },
 }));

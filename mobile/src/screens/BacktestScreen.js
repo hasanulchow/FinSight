@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ScrollView, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../lib/api";
-import { makeStyles, useTheme } from "../theme";
+import { makeStyles, useTheme, font } from "../theme";
 import { BackButton, Banner, Button, Chip, Disclaimer, Loading, SectionCard, Stat } from "../components/ui";
 import LineChart from "../components/LineChart";
 
@@ -159,7 +159,7 @@ function Row({ label, a, b, color, last }) {
   return (
     <View style={[s.row, last && { borderBottomWidth: 0 }]}>
       <Text style={s.cellLabel}>{label}</Text>
-      <Text style={[s.cell, { color: color ?? c.text, fontWeight: "800" }]}>{a}</Text>
+      <Text style={[s.cell, { color: color ?? c.text, fontWeight: "800", fontFamily: font("800") }]}>{a}</Text>
       <Text style={[s.cell, { color: c.textSecondary }]}>{b}</Text>
     </View>
   );

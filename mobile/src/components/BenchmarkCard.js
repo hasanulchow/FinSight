@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
-import { makeStyles, useTheme } from "../theme";
+import { makeStyles, useTheme, font } from "../theme";
 import { api } from "../lib/api";
 import { Loading, Pill, SectionCard, Segmented, Stat } from "./ui";
 import LineChart from "./LineChart";
@@ -57,7 +57,7 @@ export default function BenchmarkCard({ refreshKey }) {
             ].map(([label, you, spy, better]) => (
               <View key={label} style={s.tr}>
                 <Text style={[s.td, { flex: 1.3, color: c.textSecondary, textAlign: "left" }]}>{label}</Text>
-                <Text style={[s.td, { color: better ? c.gain : c.loss, fontWeight: "800" }]}>{you}</Text>
+                <Text style={[s.td, { color: better ? c.gain : c.loss, fontWeight: "800", fontFamily: font("800") }]}>{you}</Text>
                 <Text style={s.td}>{spy}</Text>
               </View>
             ))}

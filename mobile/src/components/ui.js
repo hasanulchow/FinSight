@@ -1,22 +1,11 @@
 import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
-import { makeStyles, radius, type, useTheme } from "../theme";
+import { makeStyles, radius, type, useTheme, font } from "../theme";
 
 // Shared building blocks. Every color comes from the active theme (light or dark).
 
-export function Logo({ size = 36, withName = true, nameSize }) {
-  const { c } = useTheme();
-  const s = useStyles();
-  return (
-    <View style={s.logoRow}>
-      <LinearGradient colors={c.brand.slice(0, 2)} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ width: size, height: size, borderRadius: size * 0.3, alignItems: "center", justifyContent: "center" }}>
-        <Ionicons name="trending-up" size={size * 0.58} color="#FFFFFF" />
-      </LinearGradient>
-      {withName && <Text style={[s.logoText, nameSize && { fontSize: nameSize }]}>FinSight</Text>}
-    </View>
-  );
-}
+// The brand logo lives in Brand.js; re-exported here so screens keep importing it from ui.
+export { Logo, LogoMark } from "./Brand";
 
 export function Card({ children, style, padded = true }) {
   const s = useStyles();
@@ -101,7 +90,7 @@ export function TickerAvatar({ ticker = "", size = 44 }) {
   const color = theme.tickerColor(ticker);
   return (
     <View style={{ width: size, height: size, borderRadius: size * 0.32, backgroundColor: theme.c.soft(color), alignItems: "center", justifyContent: "center" }}>
-      <Text style={{ color, fontWeight: "800", fontSize: Math.max(10, size * (ticker.length > 3 ? 0.24 : 0.3)), letterSpacing: -0.3 }}>{ticker.slice(0, 4)}</Text>
+      <Text style={{ color, fontWeight: "800", fontFamily: font("800"), fontSize: Math.max(10, size * (ticker.length > 3 ? 0.24 : 0.3)), letterSpacing: -0.3 }}>{ticker.slice(0, 4)}</Text>
     </View>
   );
 }
@@ -277,9 +266,7 @@ export function Disclaimer({ children }) {
 }
 
 const useStyles = makeStyles((c) => ({
-  logoRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  logoText: { color: c.text, fontSize: 20, fontWeight: "800", letterSpacing: -0.4 },
-  card: { backgroundColor: c.surface, borderRadius: radius.xl, borderWidth: 1, borderColor: c.border },
+  card: { backgroundColor: c.surface, borderRadius: radius.xl, borderWidth: 1, borderColor: c.border, shadowColor: c.shadow, shadowOpacity: c.dark ? 0 : 0.05, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: c.dark ? 0 : 1 },
   cardPad: { padding: 18 },
   section: { marginTop: 14 },
   sectionHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14 },

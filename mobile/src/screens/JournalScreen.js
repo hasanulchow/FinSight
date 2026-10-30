@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Modal, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../lib/api";
-import { formatMoney, makeStyles, useTheme } from "../theme";
+import { formatMoney, makeStyles, useTheme, font } from "../theme";
 import { Banner, Bullets, Button, Chip, Disclaimer, EmptyState, Input, Loading, PageHeader, SectionCard, Segmented, Stat, TickerAvatar } from "../components/ui";
 import LineChart from "../components/LineChart";
 import { ErrorNotice } from "../components/Upgrade";
@@ -155,7 +155,7 @@ export default function JournalScreen({ onOpenStock }) {
                   <View key={i} style={s.leak}>
                     <Text style={s.leakTitle}>{l.pattern}</Text>
                     <Text style={s.leakText}>{l.evidence}</Text>
-                    <Text style={[s.leakText, { color: c.loss, fontWeight: "700" }]}>{l.impact}</Text>
+                    <Text style={[s.leakText, { color: c.loss, fontWeight: "700", fontFamily: font("700") }]}>{l.impact}</Text>
                   </View>
                 ))}
                 <Text style={s.subhead}>Rules to consider</Text>
@@ -199,7 +199,7 @@ export default function JournalScreen({ onOpenStock }) {
         <SectionCard title="Possible wash sales" subtitle="Loss sold, then rebought within 30 days" section={sections.redflags}>
           {data.stats.wash_sales.map((w, i) => (
             <Text key={i} style={s.washText}>
-              <Text style={{ fontWeight: "800" }}>{w.ticker}</Text>: sold {w.sold} for {signed(w.loss)}, rebought {w.rebought}. The loss may be disallowed for taxes this year.
+              <Text style={{ fontWeight: "800", fontFamily: font("800") }}>{w.ticker}</Text>: sold {w.sold} for {signed(w.loss)}, rebought {w.rebought}. The loss may be disallowed for taxes this year.
             </Text>
           ))}
           <Text style={[s.muted, { marginTop: 6 }]}>A heads-up from your journal entries, not tax advice. Your broker's 1099-B is the official record.</Text>

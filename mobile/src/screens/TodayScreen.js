@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../lib/api";
-import { makeStyles, useTheme } from "../theme";
+import { makeStyles, useTheme, font } from "../theme";
 import { Button, Disclaimer, EmptyState, Input, Loading, PageHeader, Pill, SectionCard, TickerAvatar } from "../components/ui";
 import { ErrorNotice } from "../components/Upgrade";
 import Sheet from "../components/Sheet";
@@ -131,7 +131,7 @@ export default function TodayScreen({ onOpenStock }) {
                 <Text style={s.watchTicker}>{e.ticker}{e.owned ? <Text style={s.muted}>  you own it</Text> : null}</Text>
                 <Text style={s.muted}>{new Date(`${e.date}T12:00:00Z`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })} · {e.hour === "amc" ? "after close" : e.hour === "bmo" ? "before open" : "time TBA"}</Text>
               </View>
-              <Text style={[s.muted, { color: c.primary, fontWeight: "700" }]}>Preview</Text>
+              <Text style={[s.muted, { color: c.primary, fontWeight: "700", fontFamily: font("700") }]}>Preview</Text>
             </Pressable>
           ))}
         </SectionCard>

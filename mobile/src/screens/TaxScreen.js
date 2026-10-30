@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { RefreshControl, ScrollView, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../lib/api";
-import { formatMoney, makeStyles, useTheme } from "../theme";
+import { formatMoney, makeStyles, useTheme, font } from "../theme";
 import { Banner, Bullets, Disclaimer, Loading, PageHeader, SectionCard, Segmented, Stat, TickerAvatar } from "../components/ui";
 import { ErrorNotice } from "../components/Upgrade";
 
@@ -98,7 +98,7 @@ export default function TaxScreen({ onOpenStock }) {
           {data.wash_sales.length > 0 && (
             <SectionCard title="Possible wash sales" section={sections.alerts}>
               {data.wash_sales.map((w, i) => (
-                <Text key={i} style={s.wash}><Text style={{ fontWeight: "800" }}>{w.ticker}</Text>: sold {w.sold} at a {signed(w.loss)} loss, rebought {w.rebought}.</Text>
+                <Text key={i} style={s.wash}><Text style={{ fontWeight: "800", fontFamily: font("800") }}>{w.ticker}</Text>: sold {w.sold} at a {signed(w.loss)} loss, rebought {w.rebought}.</Text>
               ))}
             </SectionCard>
           )}

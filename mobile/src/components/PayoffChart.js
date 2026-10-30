@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import Svg, { Defs, ClipPath, Line, Path, Rect, Text as SvgText } from "react-native-svg";
-import { makeStyles, useTheme, alpha } from "../theme";
+import { makeStyles, useTheme, alpha, font } from "../theme";
 
 const H = 220;
 const AXIS_W = 52;
@@ -49,8 +49,8 @@ export default function PayoffChart({ curve = [], spot, breakevens = [], expecte
         <View style={styles.readout}>
           <Text style={styles.readoutLabel}>If {hover ? "price is" : "price stays at"} ${shown.price}</Text>
           <Text style={styles.readoutText}>
-            At expiration <Text style={{ color: plColor(shown.expiry), fontWeight: "800" }}>{fmt(shown.expiry)}</Text>
-            {"   "}Today <Text style={{ color: plColor(shown.today), fontWeight: "800" }}>{fmt(shown.today)}</Text>
+            At expiration <Text style={{ color: plColor(shown.expiry), fontWeight: "800", fontFamily: font("800") }}>{fmt(shown.expiry)}</Text>
+            {"   "}Today <Text style={{ color: plColor(shown.today), fontWeight: "800", fontFamily: font("800") }}>{fmt(shown.today)}</Text>
           </Text>
         </View>
       )}

@@ -168,6 +168,13 @@ The legal texts are starting templates written for FinSight's actual features. H
 
 **Before turning on real trading:** get SnapTrade's trading plan, confirm which brokers allow it, and have a lawyer review your disclosures and terms. FinSight routes users' own orders to their own brokers. It never holds money, and its AI never recommends trades.
 
+### Brand and design system (v1.7)
+
+- **Logo:** a lens with a trend line rising inside it and breaking out, ending in a cyan spark ("insight into where things are going"). The master is `mobile/assets/brand/mark.svg`, and `components/Brand.js` renders it in the app. `assets/brand/render-icons.mjs` (run with `sharp`) produces the iOS/Android icons, the adaptive icon, the splash icon and the favicon.
+- **Type:** Inter (400 to 800) via `@expo-google-fonts/inter`. `makeStyles` applies the matching Inter weight to every text style automatically; use `font("700")` for inline styles.
+- **Icons:** a custom navigation icon set (`components/NavIcon.js`) on a 24px grid with a 1.8 stroke and a tinted active state, used in the tab bar, sidebar, More menu, landing page and sign-in.
+- **Landing page:** hero with a phone mockup of the real UI, a bento feature grid with mini visuals, trading and charts showcases, pricing with a monthly/yearly toggle, FAQ, and a footer with legal links. All example numbers are labeled as illustrative.
+
 ## Setup
 
 **Requirements:** Node.js 22 or later (Expo SDK 58 and supabase-js need it), and the Expo Go app on your phone.

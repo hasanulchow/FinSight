@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import Svg, { Line, Path, Rect, Text as SvgText } from "react-native-svg";
-import { makeStyles, useTheme, alpha } from "../theme";
+import { makeStyles, useTheme, alpha, font } from "../theme";
 
 // Candlestick chart drawn with react-native-svg (iOS, Android and web):
 // price candles + SMA50/SMA200 + Bollinger Bands, volume bars, and an RSI(14) panel with 30/70 lines.
@@ -85,7 +85,7 @@ export default function CandleChart({ data = [], showBands = true }) {
         <View style={styles.readout}>
           <Text style={styles.readoutDate}>{fmtDate(active.t)}</Text>
           <Text style={styles.readoutText}>
-            O {active.o} H {active.h} L {active.l} C <Text style={{ fontWeight: "800" }}>{active.c}</Text>
+            O {active.o} H {active.h} L {active.l} C <Text style={{ fontWeight: "800", fontFamily: font("800") }}>{active.c}</Text>
             {change != null && <Text style={{ color: change >= 0 ? c.gain : c.loss }}>  {change >= 0 ? "+" : ""}{change.toFixed(2)}%</Text>}
           </Text>
           <Text style={styles.readoutSub}>RSI {active.rsi ?? "–"} · SMA50 {active.sma50 ?? "–"} · SMA200 {active.sma200 ?? "–"}</Text>

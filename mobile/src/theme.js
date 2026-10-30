@@ -165,18 +165,35 @@ export function makeStyles(factory) {
   const cache = new Map();
   return function useStyles() {
     const theme = useTheme();
-    if (!cache.has(theme.mode)) cache.set(theme.mode, StyleSheet.create(factory(theme.c, theme)));
+    if (!cache.has(theme.mode)) cache.set(theme.mode, StyleSheet.create(withFonts(factory(theme.c, theme))));
     return cache.get(theme.mode);
   };
+}
+
+// ---------- Typography ----------
+// Inter, one static file per weight (loaded in App.js). Each weight needs its own family name on
+// iOS and Android, so any text style that sets fontSize or fontWeight gets the matching family.
+export const FONT_FILES = ["Inter_400Regular", "Inter_500Medium", "Inter_600SemiBold", "Inter_700Bold", "Inter_800ExtraBold"];
+const WEIGHT_FAMILY = { 100: "Inter_400Regular", 200: "Inter_400Regular", 300: "Inter_400Regular", 400: "Inter_400Regular", normal: "Inter_400Regular", 500: "Inter_500Medium", 600: "Inter_600SemiBold", 700: "Inter_700Bold", bold: "Inter_700Bold", 800: "Inter_800ExtraBold", 900: "Inter_800ExtraBold" };
+
+/** Family for a weight, e.g. font("700") -> "Inter_700Bold". Use with inline styles. */
+export const font = (weight = "400") => WEIGHT_FAMILY[weight] ?? "Inter_400Regular";
+
+function withFonts(styles) {
+  const out = {};
+  for (const [name, style] of Object.entries(styles)) {
+    out[name] = style && !style.fontFamily && (style.fontSize != null || style.fontWeight != null) ? { ...style, fontFamily: font(String(style.fontWeight ?? "400")) } : style;
+  }
+  return out;
 }
 
 // ---------- Shared tokens ----------
 export const radius = { sm: 8, md: 12, lg: 16, xl: 22, pill: 999 };
 export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 };
 export const type = {
-  display: { fontSize: 34, fontWeight: "800", letterSpacing: -0.8 },
-  title: { fontSize: 26, fontWeight: "800", letterSpacing: -0.5 },
-  heading: { fontSize: 18, fontWeight: "700", letterSpacing: -0.2 },
+  display: { fontSize: 34, fontWeight: "800", letterSpacing: -1.1 },
+  title: { fontSize: 27, fontWeight: "800", letterSpacing: -0.8 },
+  heading: { fontSize: 17, fontWeight: "700", letterSpacing: -0.3 },
   body: { fontSize: 15, lineHeight: 22 },
   small: { fontSize: 13, lineHeight: 18 },
   caption: { fontSize: 11, fontWeight: "600", letterSpacing: 0.4, textTransform: "uppercase" },

@@ -6,6 +6,7 @@ import { api } from "../lib/api";
 import { makeStyles, useTheme } from "../theme";
 import { Button, Disclaimer, IconButton } from "../components/ui";
 import Markdown from "../components/Markdown";
+import NavIcon from "../components/NavIcon";
 import { ErrorNotice } from "../components/Upgrade";
 
 const SUGGESTIONS = [
@@ -119,7 +120,7 @@ export default function CopilotScreen({ onOpenStock, onOpenAutomations }) {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <View style={s.topBar}>
         <View style={[s.topIcon, { backgroundColor: sec.soft }]}>
-          <Ionicons name="sparkles" size={16} color={sec.color} />
+          <NavIcon name="copilot" size={18} color={sec.color} active />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={s.topTitle}>Copilot</Text>
@@ -160,7 +161,7 @@ export default function CopilotScreen({ onOpenStock, onOpenAutomations }) {
         {empty ? (
           <View style={s.hero}>
             <LinearGradient colors={c.brand.slice(0, 2)} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.heroIcon}>
-              <Ionicons name="sparkles" size={28} color="#FFFFFF" />
+              <NavIcon name="copilot" size={32} color="#FFFFFF" />
             </LinearGradient>
             <Text style={s.heroTitle}>What do you want to know?</Text>
             <Text style={s.heroText}>
