@@ -6,6 +6,7 @@ import { makeStyles, useTheme } from "../theme";
 import { Button, Disclaimer, EmptyState, Input, Loading, PageHeader, Pill, SectionCard, TickerAvatar } from "../components/ui";
 import { ErrorNotice } from "../components/Upgrade";
 import Sheet from "../components/Sheet";
+import EarningsSheet from "../components/EarningsSheet";
 
 const greeting = () => {
   const h = new Date().getHours();
@@ -23,6 +24,8 @@ export default function TodayScreen({ onOpenStock }) {
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState(null); // {} for new, or a watchlist row
   const [checking, setChecking] = useState(null);
+  const [earnings, setEarnings] = useState([]);
+  const [earningsTicker, setEarningsTicker] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -30,6 +33,7 @@ export default function TodayScreen({ onOpenStock }) {
       const [b, w] = await Promise.all([api.brief(), api.watchlist()]);
       setBrief(b.empty ? null : b);
       setWatch(w);
+      api.earningsUpcoming(14).then(setEarnings).catch(() => {});
       setError(null);
     } catch (e) {
       setError(e);
@@ -118,6 +122,21 @@ export default function TodayScreen({ onOpenStock }) {
         </SectionCard>
       )}
 
+      {earnings.length > 0 && (
+        <SectionCard title="Earnings coming up" subtitle="Your holdings and watchlist, next 2 weeks" section={sections.events}>
+          {earnings.map((e) => (
+            <Pressable key={`${e.ticker}-${e.date}`} onPress={() => setEarningsTicker(e.ticker)} style={({ hovered }) => [s.earnRow, hovered && { backgroundColor: c.surfaceAlt }]}>
+              <TickerAvatar ticker={e.ticker} size={34} />
+              <View style={{ flex: 1 }}>
+                <Text style={s.watchTicker}>{e.ticker}{e.owned ? <Text style={s.muted}>  you own it</Text> : null}</Text>
+                <Text style={s.muted}>{new Date(`${e.date}T12:00:00Z`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })} · {e.hour === "amc" ? "after close" : e.hour === "bmo" ? "before open" : "time TBA"}</Text>
+              </View>
+              <Text style={[s.muted, { color: c.primary, fontWeight: "700" }]}>Preview</Text>
+            </Pressable>
+          ))}
+        </SectionCard>
+      )}
+
       {watch && (
         <SectionCard
           title="Watchlist & theses"
@@ -155,6 +174,7 @@ export default function TodayScreen({ onOpenStock }) {
       )}
 
       <Disclaimer>Briefs and thesis checks are AI summaries of public data. They can be wrong and are not investment advice.</Disclaimer>
+      <EarningsSheet ticker={earningsTicker} visible={!!earningsTicker} onClose={() => setEarningsTicker(null)} />
       <WatchSheet item={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />
     </ScrollView>
   );
@@ -224,6 +244,7 @@ const useStyles = makeStyles((c) => ({
   subhead: { color: c.muted, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 },
   calRow: { flexDirection: "row", gap: 8, alignItems: "center", marginTop: 4 },
   calText: { flex: 1, color: c.text, fontSize: 13 },
+  earnRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: c.border, borderRadius: 8 },
   watchRow: { flexDirection: "row", gap: 12, paddingVertical: 14, borderTopWidth: 1, borderTopColor: c.border },
   watchHead: { flexDirection: "row", alignItems: "center", gap: 8 },
   watchTicker: { color: c.text, fontWeight: "800", fontSize: 16 },

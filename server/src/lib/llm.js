@@ -3,8 +3,30 @@ import { config } from "../config.js";
 import { supabase } from "./supabase.js";
 import { localStore } from "./localStore.js";
 import { recordAiUsage } from "./aiUsage.js";
+import { reportError } from "./monitoring.js";
 
 const client = new Anthropic(); // reads ANTHROPIC_API_KEY
+
+/**
+ * Turns Anthropic API failures into errors that are safe to show users (503, plain message),
+ * and reports the ones the operator must act on (billing, keys) to monitoring.
+ */
+export function friendlyAiError(err) {
+  if (!(err instanceof Anthropic.APIError)) return err;
+  let message = "The AI service is busy right now. Please try again in a minute.";
+  if (err instanceof Anthropic.AuthenticationError || err instanceof Anthropic.PermissionDeniedError) {
+    message = "The AI service isn't available right now. We're on it.";
+    reportError(err, { where: "anthropic", kind: "auth" });
+  } else if (err instanceof Anthropic.BadRequestError && /credit balance/i.test(err.message)) {
+    message = "The AI service isn't available right now. We're on it.";
+    reportError(err, { where: "anthropic", kind: "billing" });
+    console.error("ANTHROPIC CREDITS EXHAUSTED: top up at console.anthropic.com (Plans & Billing)");
+  } else if (err instanceof Anthropic.BadRequestError) {
+    message = "The AI couldn't process that request.";
+    reportError(err, { where: "anthropic", kind: "bad_request" });
+  }
+  return Object.assign(new Error(message), { status: 503, cause: err });
+}
 
 /**
  * Runs one agent: a single Claude call that must return JSON matching `schema`.
@@ -44,7 +66,7 @@ export async function runAgent({ agent, system, prompt, schema, briefingId, mode
     return output;
   } catch (err) {
     await logAgent({ briefingId, agent, model, latency_ms: Date.now() - started, status: "error", error: String(err.message || err) });
-    throw err;
+    throw friendlyAiError(err);
   }
 }
 

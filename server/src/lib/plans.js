@@ -23,6 +23,7 @@ export const PLANS = {
   pro: {
     name: "Pro",
     price_label: process.env.PRO_PRICE_LABEL ?? "$19/mo", // display only; Stripe's price is what's charged
+    annual_price_label: process.env.PRO_ANNUAL_PRICE_LABEL ?? "$190/yr",
     limits: {
       briefing: num("PRO_BRIEFINGS_PER_DAY", 40),
       copilot: num("PRO_COPILOT_PER_DAY", 300),
@@ -45,8 +46,9 @@ export async function getPlan(userId) {
 async function planSource(userId) {
   if (config.localMode && process.env.DEV_PLAN !== "free") return { plan: "pro", source: "dev" };
   if (!config.localMode) {
-    const { data } = await supabase().from("subscriptions").select("plan, status, current_period_end").eq("user_id", userId).maybeSingle();
-    if (data && data.plan === "pro" && ACTIVE.has(data.status) && (!data.current_period_end || Date.parse(data.current_period_end) > Date.now() - 86_400_000)) return { plan: "pro", source: data.status === "trialing" ? "trial" : "subscription" };
+    const { data } = await supabase().from("subscriptions").select("plan, status, current_period_end, paused_until").eq("user_id", userId).maybeSingle();
+    const paused = data?.paused_until && Date.parse(data.paused_until) > Date.now(); // billing paused from the cancel flow: no Pro meanwhile
+    if (data && data.plan === "pro" && !paused && ACTIVE.has(data.status) && (!data.current_period_end || Date.parse(data.current_period_end) > Date.now() - 86_400_000)) return { plan: "pro", source: data.status === "trialing" ? "trial" : "subscription" };
   }
   const until = await referralProUntil(userId).catch(() => null);
   if (until) return { plan: "pro", source: "referral", until };
@@ -94,8 +96,8 @@ export async function planSummary(userId) {
   for (const feature of Object.keys(PLANS[plan].limits)) usage[feature] = { used: await usedToday(userId, feature), limit: PLANS[plan].limits[feature] };
   let subscription = null;
   if (!config.localMode) {
-    const { data } = await supabase().from("subscriptions").select("plan, status, current_period_end, cancel_at_period_end").eq("user_id", userId).maybeSingle();
+    const { data } = await supabase().from("subscriptions").select("plan, status, current_period_end, cancel_at_period_end, interval, paused_until").eq("user_id", userId).maybeSingle();
     subscription = data;
   }
-  return { plan, plan_name: PLANS[plan].name, pro_source: source, pro_until: until ?? null, usage, caps: PLANS[plan].caps, subscription, billing_enabled: Boolean(config.stripeKey && config.stripePricePro), trial_days: subscription ? 0 : TRIAL_DAYS };
+  return { plan, plan_name: PLANS[plan].name, pro_source: source, pro_until: until ?? null, usage, caps: PLANS[plan].caps, subscription, billing_enabled: Boolean(config.stripeKey && config.stripePricePro), annual_enabled: Boolean(config.stripeKey && config.stripePriceProAnnual), trial_days: subscription ? 0 : TRIAL_DAYS };
 }

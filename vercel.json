@@ -185,6 +185,26 @@
     {
       "source": "/admin/:path*",
       "destination": "/api"
+    },
+    {
+      "source": "/paper",
+      "destination": "/api"
+    },
+    {
+      "source": "/paper/:path*",
+      "destination": "/api"
+    },
+    {
+      "source": "/live/:path*",
+      "destination": "/api"
+    },
+    {
+      "source": "/earnings/:path*",
+      "destination": "/api"
+    },
+    {
+      "source": "/email/:path*",
+      "destination": "/api"
     }
   ],
   "crons": [

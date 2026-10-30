@@ -710,3 +710,57 @@ Schema: `supabase/004_options_markets.sql` adds `kv_cache`, a shared cache for o
 - **iPad.** `app.json` sets `orientation: default` and `ios.requireFullScreen: false` (Split View and Slide Over). Every `Modal` sets `supportedOrientations` to portrait and landscape. `Sheet` is a centered dialog at 768pt and wider.
 - **Shared UI fixes.** `PageHeader` actions wrap under the title on narrow screens, and inputs can shrink below the web's default input width.
 - **Data model.** Migration `006` adds `user_settings`, `watchlist`, `daily_briefs`, `copilot_tasks`, `broker_connections`, `ai_usage`, `shares` and `trades.external_id`. `broker_connections` and `ai_usage` have no client read policies.
+
+## 21. v1.6 Trading, Earnings, Email and Production Hardening
+
+### 21.1 Paper trading (`lib/paper.js`)
+- **Account.** `paper_accounts` holds cash, starting cash, realized P/L and the number of resets. Positions (`paper_positions`) store quantity, weighted average cost and when they were opened. Orders (`paper_orders`) are market, limit or stop; good for the day or until cancelled; and open, filled, cancelled, rejected or expired.
+- **Fills.**
+  - `shouldFill`: market orders fill at the last price while NYSE is open (9:30 to 16:00 America/New_York, holidays not modeled). Buy limits fill at or below the limit, sell limits at or above it. Stops trigger when the price crosses them.
+  - `applyFill`: updates the weighted average cost; sells realize P/L and can't exceed the shares held.
+  - Cash is re-checked at fill time, so an order that no longer fits is rejected.
+- **Buying power.** Cash minus what open buy orders reserve. A preview returns the estimated cost, buying power after, blocking problems, warnings (such as "fills at the next open"), and the user's rules checklist.
+- **Processing.** On every account read, and by the `paper` job during market hours. Day orders expire after the close, and limit or stop fills send a notification.
+- **Journal.** Each sell fill becomes a closed journal trade (setup `paper`, `external_id = paper:<order id>`).
+- **Copilot.** `get_paper_account` (read) and `propose_paper_order` (a proposal the user must confirm). The Copilot has no real-money tools.
+
+### 21.2 Real trading through the user's broker (`lib/broker.js`)
+- **Switch.** Requires `BROKER_TRADING_ENABLED=true` and SnapTrade keys. Connections are requested as `trade` instead of `read`.
+- **Preview.** Resolves the symbol with `referenceData.symbolSearchUserAccount`, then calls `trading.getOrderImpact`. The result is stored as a `live_orders` row with status `previewed`, the SnapTrade trade id, price, commission and cash after.
+- **Place.** `trading.placeOrder({ tradeId })` runs only with `confirm: true`, within 4 minutes of the preview, and only once. Broker errors are stored and shown.
+- **App.** The user must tick a real-money acknowledgement before the Place button enables.
+
+### 21.3 Earnings companion (`lib/earnings.js`)
+- **Implied move.** Taken from the options overview at the first expiration on or after the reaction day (the day after for after-close reports).
+- **Historical moves.** Computed by `historicalMoves` over the last 8 reports: before-open reports are measured from the prior close to the report-day close, after-close reports from the report-day close to the next close.
+- **AI preview.** Agent `earnings_companion` (effort low) writes the headline, what to watch, the setup and a risk note. Cached for 6 hours and counts against the `ai_tool` quota.
+- **Jobs.** On report days the `earnings` job (11:00 to 14:00 UTC) notifies holders and watchers with the implied move against the average past move. The recap refreshes the events summary.
+
+### 21.4 Weekly email (`lib/email.js`)
+- **Content.** Portfolio return vs SPY (5 sessions), closed trades this week, the paper account, earnings in the next 7 days and thesis checks. The HTML is email-safe and escapes all user content.
+- **Sending.** Resend API (`RESEND_API_KEY`, `EMAIL_FROM`), Sundays from 14:00 UTC, once per week (`last_weekly_email`). Users opt out with `weekly_email`.
+- **Unsubscribe.** An HMAC token (`/email/unsubscribe?u=&t=`, GET and POST for RFC 8058), plus the `List-Unsubscribe` header.
+
+### 21.5 Billing additions
+- **Annual plan.** `interval: year` uses `STRIPE_PRICE_PRO_ANNUAL`. Subscriptions store `interval` and `paused_until`, and a paused subscription doesn't grant Pro.
+- **Cancel flow.**
+  - Reasons map to offers: taking a break or not using it → pause billing for 30 days; too expensive → `STRIPE_RETENTION_COUPON` if set, else switching to yearly.
+  - Cancelling sets `cancel_at_period_end`, and resume clears it.
+  - Every step is stored in `cancel_feedback` and sent to analytics.
+
+### 21.6 Hardening
+- **Rate limits.** In-memory fixed one-minute windows per IP: `RATE_LIMIT_PER_MIN` (240) for reads and `RATE_LIMIT_WRITES_PER_MIN` (60) for writes. Exceeding them returns 429 with `Retry-After`. `trust proxy` is set for Render and Vercel.
+- **Monitoring.** `@sentry/node` when `SENTRY_DSN` is set. Every route helper and the final Express error handler report 5xx errors, failed jobs and AI provider auth or billing failures. Request bodies, cookies and auth headers are removed before sending.
+- **AI errors.** `friendlyAiError` maps Anthropic API errors to a 503 with a safe message.
+- **Tests and CI.** `node --test` with `test/setup.js` (local mode, offline): 18 tests covering paper fills, FIFO round trips, post-earnings moves, option P/L attribution, position size, journal stats and wash sales, CSV import, rules, schedules, the rate limiter, unsubscribe tokens and email escaping. `.github/workflows/ci.yml` runs the server check and tests and the app web build.
+
+### 21.7 App
+- **Tabs.**
+  - Phone: Today, Copilot, Trade, Portfolio and More. Research moved to More.
+  - The Trade tab has Practice and Real money modes. Real money appears only when enabled and connected.
+- **Stock page.** Paper Buy and Sell buttons, plus an Earnings tile.
+- **Today.** An "Earnings coming up" card.
+- **Account.**
+  - Plans: monthly/yearly toggle, plus "Cancel plan", which opens the cancel flow, or "Resume plan".
+  - Email: weekly email toggle and a test send.
+- **Data model.** Migration `007` adds `paper_accounts`, `paper_positions`, `paper_orders`, `live_orders` and `cancel_feedback`. It also adds `user_settings.weekly_email` and `last_weekly_email`, and `subscriptions.interval` and `paused_until`.

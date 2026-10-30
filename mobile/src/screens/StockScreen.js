@@ -9,6 +9,8 @@ import EventsCard from "../components/EventsCard";
 import AlertSheet from "../components/AlertSheet";
 import RedFlagsCard from "../components/RedFlagsCard";
 import PositionSizerSheet from "../components/PositionSizerSheet";
+import OrderSheet from "../components/OrderSheet";
+import EarningsSheet from "../components/EarningsSheet";
 
 /** Quick stock view: chart + technicals (AI read on demand), earnings & insiders, and actions. */
 export default function StockScreen({ ticker, onBack, onBrief, onOptions, onBacktest }) {
@@ -19,6 +21,8 @@ export default function StockScreen({ ticker, onBack, onBrief, onOptions, onBack
   const [explaining, setExplaining] = useState(false);
   const [alertOpen, setAlertOpen] = useState(false);
   const [sizerOpen, setSizerOpen] = useState(false);
+  const [orderSide, setOrderSide] = useState(null);
+  const [earningsOpen, setEarningsOpen] = useState(false);
   const [toast, setToast] = useState(null);
   const [briefing, setBriefing] = useState(false);
 
@@ -55,6 +59,7 @@ export default function StockScreen({ ticker, onBack, onBrief, onOptions, onBack
     { key: "backtest", label: "Backtest", sub: "Test trading rules", section: sections.backtest, onPress: () => onBacktest(ticker) },
     { key: "size", label: "Size it", sub: "Shares for your risk", section: sections.risk, onPress: () => setSizerOpen(true) },
     { key: "alert", label: "Alert", sub: "Price, RSI, earnings…", section: sections.alerts, onPress: () => setAlertOpen(true) },
+    { key: "earnings", label: "Earnings", sub: "Implied vs past moves", section: sections.events, onPress: () => setEarningsOpen(true) },
   ];
 
   return (
@@ -81,7 +86,12 @@ export default function StockScreen({ ticker, onBack, onBrief, onOptions, onBack
             )}
           </View>
         </View>
-        <Button title="Full AI briefing" icon="sparkles" onPress={brief} loading={briefing} size="lg" style={{ marginTop: 18 }} />
+        <View style={{ flexDirection: "row", gap: 10, marginTop: 18 }}>
+          <Button title="Buy" onPress={() => setOrderSide("buy")} size="lg" style={{ flex: 1, backgroundColor: c.gain }} />
+          <Button title="Sell" onPress={() => setOrderSide("sell")} size="lg" style={{ flex: 1, backgroundColor: c.loss }} />
+        </View>
+        <Text style={[s.muted, { textAlign: "center", marginTop: 6, fontSize: 12 }]}>Practice trading with paper money</Text>
+        <Button title="Full AI briefing" icon="sparkles" variant="secondary" onPress={brief} loading={briefing} size="lg" style={{ marginTop: 12 }} />
         <View style={s.tools}>
           {tools.map((t) => (
             <Pressable key={t.key} onPress={t.onPress} style={({ hovered, pressed }) => [s.tool, hovered && { borderColor: t.section.color }, pressed && { opacity: 0.85 }]}>
@@ -106,6 +116,8 @@ export default function StockScreen({ ticker, onBack, onBrief, onOptions, onBack
 
       <Disclaimer>Educational information from market data and SEC filings, not investment advice.</Disclaimer>
 
+      <OrderSheet visible={!!orderSide} onClose={() => setOrderSide(null)} ticker={ticker} side={orderSide ?? "buy"} mode="paper" onPlaced={(o) => setToast({ tone: "success", text: o.status === "filled" ? `Paper order filled at ${Number(o.filled_price).toFixed(2)}. See it in Trade.` : "Paper order placed. See it in Trade." })} />
+      <EarningsSheet ticker={ticker} visible={earningsOpen} onClose={() => setEarningsOpen(false)} />
       <PositionSizerSheet ticker={ticker} price={snap?.price} visible={sizerOpen} onClose={() => setSizerOpen(false)} />
       <AlertSheet ticker={ticker} price={snap?.price} visible={alertOpen} onClose={() => setAlertOpen(false)} onCreated={() => setToast({ tone: "success", text: "Alert created. Find it in the Alerts tab." })} />
     </ScrollView>

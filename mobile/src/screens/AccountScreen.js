@@ -5,8 +5,9 @@ import { LinearGradient } from "expo-linear-gradient";
 import { api } from "../lib/api";
 import { localMode, supabase } from "../lib/supabase";
 import { makeStyles, useTheme } from "../theme";
-import { Banner, Button, Input, Loading, PageHeader, Pill, SectionCard } from "../components/ui";
+import { Banner, Button, Input, Loading, PageHeader, Pill, SectionCard, Segmented } from "../components/ui";
 import { shareLink } from "../lib/share";
+import CancelSheet from "../components/CancelSheet";
 
 const FEATURE_LABELS = {
   copilot: ["Copilot messages", "sparkles-outline"],
@@ -38,6 +39,9 @@ export default function AccountScreen({ email, onOpenLegal, onOpenAdmin }) {
   const [notice, setNotice] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null); // null = hidden, string = typed text
   const [deleting, setDeleting] = useState(false);
+  const [interval, setInterval_] = useState("year");
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [emailNote, setEmailNote] = useState(null);
   const billingParam = Platform.OS === "web" && typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("billing") : null;
 
   const load = useCallback(async () => {
@@ -83,6 +87,20 @@ export default function AccountScreen({ email, onOpenLegal, onOpenAdmin }) {
     setDeleting(false);
   }
 
+  async function toggleWeekly(v) {
+    setSettings((st) => ({ ...st, weekly_email: v }));
+    await api.updateSettings({ weekly_email: v }).catch((e) => setError(e.message));
+  }
+
+  async function sendTest() {
+    try {
+      const r = await api.emailTest();
+      setEmailNote(`Test report sent to ${r.to}`);
+    } catch (e) {
+      setEmailNote(e.message);
+    }
+  }
+
   async function go(fn) {
     setBusy(true);
     setError(null);
@@ -126,7 +144,14 @@ export default function AccountScreen({ email, onOpenLegal, onOpenAdmin }) {
               <Ionicons name={pro ? "diamond" : "leaf-outline"} size={30} color={pro ? "#FFFFFF" : c.primary} />
             </View>
             {pro && account.billing_enabled && sub && (
-              <Button title="Manage billing" icon="card-outline" variant="secondary" size="sm" onPress={() => go(api.billingPortal)} loading={busy} style={{ marginTop: 16, alignSelf: "flex-start", backgroundColor: "rgba(255,255,255,0.2)" }} />
+              <View style={{ flexDirection: "row", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
+                <Button title="Manage billing" icon="card-outline" variant="secondary" size="sm" onPress={() => go(api.billingPortal)} loading={busy} style={{ backgroundColor: "rgba(255,255,255,0.2)" }} />
+                {sub.cancel_at_period_end ? (
+                  <Button title="Resume plan" icon="play" variant="secondary" size="sm" onPress={async () => { await api.cancelFlow({ action: "resume", reason: "other" }).catch((e) => setError(e.message)); load(); }} style={{ backgroundColor: "rgba(255,255,255,0.2)" }} />
+                ) : (
+                  <Button title="Cancel plan" variant="ghost" size="sm" onPress={() => setCancelOpen(true)} style={{ borderColor: "rgba(255,255,255,0.35)" }} />
+                )}
+              </View>
             )}
           </LinearGradient>
 
@@ -151,15 +176,16 @@ export default function AccountScreen({ email, onOpenLegal, onOpenAdmin }) {
             <Text style={s.muted}>Limits: {account.caps.alerts} alerts · {account.caps.holdings} holdings · {account.caps.trades.toLocaleString()} journal trades</Text>
           </SectionCard>
 
-          {!pro && proPlan && (
+          {/* Referral Pro is temporary, so those users can still subscribe */}
+          {(!pro || account.pro_source === "referral") && proPlan && (
             <View style={s.upsell}>
               <View style={s.upsellHead}>
                 <View style={{ flex: 1 }}>
                   <Pill text="Most popular" color={c.primary} icon="star" />
                   <Text style={s.upsellTitle}>FinSight Pro</Text>
                   <Text style={s.upsellPrice}>
-                    {proPlan.price_label}
-                    <Text style={s.muted}>  cancel anytime</Text>
+                    {account.annual_enabled && interval === "year" ? proPlan.annual_price_label : proPlan.price_label}
+                    <Text style={s.muted}>  {account.annual_enabled && interval === "year" ? "2 months free" : "cancel anytime"}</Text>
                   </Text>
                 </View>
                 <Ionicons name="diamond" size={34} color={c.primary} />
@@ -172,7 +198,12 @@ export default function AccountScreen({ email, onOpenLegal, onOpenAdmin }) {
               ))}
               {account.billing_enabled ? (
                 <>
-                <Button title={account.trial_days > 0 ? `Start ${account.trial_days}-day free trial` : "Upgrade to Pro"} icon="rocket" size="lg" onPress={() => { api.track("upgrade_clicked", { trial: account.trial_days }); go(api.checkout); }} loading={busy} style={{ marginTop: 16 }} />
+                {account.annual_enabled && (
+                  <View style={{ marginTop: 14 }}>
+                    <Segmented options={[["year", `Yearly · ${proPlan.annual_price_label}`], ["month", `Monthly · ${proPlan.price_label}`]]} value={interval} onChange={setInterval_} />
+                  </View>
+                )}
+                <Button title={account.trial_days > 0 ? `Start ${account.trial_days}-day free trial` : "Upgrade to Pro"} icon="rocket" size="lg" onPress={() => { const iv = account.annual_enabled ? interval : "month"; api.track("upgrade_clicked", { trial: account.trial_days, interval: iv }); go((url) => api.checkout(url, iv)); }} loading={busy} style={{ marginTop: 16 }} />
                 {account.trial_days > 0 && <Text style={[s.muted, { textAlign: "center", marginTop: 8 }]}>Then {proPlan.price_label}. Cancel anytime before the trial ends and you won't be charged.</Text>}
                 </>
               ) : (
@@ -209,6 +240,15 @@ export default function AccountScreen({ email, onOpenLegal, onOpenAdmin }) {
                 </View>
                 <Switch value={settings.brief_enabled !== false} onValueChange={toggleBrief} trackColor={{ true: c.primary, false: c.borderStrong }} />
               </View>
+              <View style={[s.settingRow, { marginTop: 16 }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.settingLabel}>Weekly email report</Text>
+                  <Text style={s.muted}>Sundays: your portfolio vs the S&P 500, your trades and earnings ahead</Text>
+                </View>
+                <Switch value={settings.weekly_email !== false} onValueChange={toggleWeekly} trackColor={{ true: c.primary, false: c.borderStrong }} />
+              </View>
+              <Button title="Send me a test report" size="sm" variant="ghost" icon="mail-outline" onPress={sendTest} style={{ marginTop: 12, alignSelf: "flex-start" }} />
+              {emailNote && <Text style={[s.muted, { marginTop: 6 }]}>{emailNote}</Text>}
             </SectionCard>
           )}
 
@@ -226,6 +266,8 @@ export default function AccountScreen({ email, onOpenLegal, onOpenAdmin }) {
               </Pressable>
             )}
           </SectionCard>
+
+          <CancelSheet visible={cancelOpen} onClose={() => setCancelOpen(false)} onDone={load} onSwitchAnnual={() => { setCancelOpen(false); go(api.billingPortal); }} />
 
           {!localMode && <Button title="Sign out" icon="log-out-outline" variant="ghost" onPress={() => supabase.auth.signOut()} style={{ marginTop: 20 }} />}
 

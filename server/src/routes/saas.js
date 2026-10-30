@@ -1,11 +1,12 @@
 import { requireUser } from "../lib/auth.js";
 import { checkQuota, recordUsage, planSummary, checkCap, PLANS } from "../lib/plans.js";
-import { createCheckout, createPortal, handleWebhook } from "../lib/billing.js";
+import { createCheckout, createPortal, handleWebhook, cancelFlow, retentionOffer, CANCEL_REASONS } from "../lib/billing.js";
 import { runCopilot, resolveAction, listConversations, getMessages, listPendingActions, TOOLS } from "../lib/copilot.js";
 import { listTrades, addTrade, updateTrade, deleteTrade, journalStats, journalCoach, parseTradesCsv, tradeResult, EMOTIONS } from "../lib/journal.js";
 import { positionSize, stopSuggestions, benchmarkPortfolio } from "../lib/risk.js";
 import { getRedFlags } from "../lib/redflags.js";
 import { getQuoteLite } from "../tools/quote.js";
+import { reportError } from "../lib/monitoring.js";
 
 // Routes for the SaaS layer: Copilot agent, trade journal + coach, risk tools, red flags,
 // plans/usage and Stripe billing.
@@ -13,11 +14,15 @@ import { getQuoteLite } from "../tools/quote.js";
 const TICKER_RE = /^[A-Z][A-Z0-9.\-]{0,9}$/;
 
 // Errors with .status become that HTTP status; 402 responses carry `upgrade` for the app's paywall
+
 const handle = (fn) => async (req, res) => {
   try {
     await fn(req, res);
   } catch (err) {
-    if (!err.status || err.status >= 500) console.error(`${req.method} ${req.path}:`, err.message);
+    if (!err.status || err.status >= 500) {
+      console.error(`${req.method} ${req.path}:`, err.message);
+      reportError(err, { route: req.path, userId: req.user?.id });
+    }
     if (!res.headersSent) res.status(err.status ?? 500).json({ error: err.message, ...(err.upgrade != null && { upgrade: err.upgrade }) });
   }
 };
@@ -26,7 +31,9 @@ export function registerSaasRoutes(app) {
   // ---------- Plans & billing ----------
   app.get("/plans", (_req, res) => res.json(Object.entries(PLANS).map(([key, p]) => ({ key, ...p }))));
   app.get("/account", requireUser, handle(async (req, res) => res.json({ email: req.user.email, ...(await planSummary(req.user.id)) })));
-  app.post("/billing/checkout", requireUser, handle(async (req, res) => res.json(await createCheckout(req.user, { returnUrl: req.body?.return_url }))));
+  app.post("/billing/checkout", requireUser, handle(async (req, res) => res.json(await createCheckout(req.user, { returnUrl: req.body?.return_url, interval: req.body?.interval === "year" ? "year" : "month" }))));
+  app.get("/billing/cancel-reasons", requireUser, (_req, res) => res.json(Object.entries(CANCEL_REASONS).map(([key, label]) => ({ key, label, offer: retentionOffer(key) }))));
+  app.post("/billing/cancel", requireUser, handle(async (req, res) => res.json(await cancelFlow(req.user, req.body ?? {}))));
   app.post("/billing/portal", requireUser, handle(async (req, res) => res.json(await createPortal(req.user, { returnUrl: req.body?.return_url }))));
   // Stripe calls this; express.json keeps the raw bytes in req.rawBody for signature verification
   app.post("/billing/webhook", handle(async (req, res) => res.json(await handleWebhook(req.rawBody, req.headers["stripe-signature"]))));

@@ -31,14 +31,16 @@ import AdminScreen from "./src/screens/AdminScreen";
 import LegalScreen from "./src/screens/LegalScreen";
 import OnboardingScreen from "./src/screens/OnboardingScreen";
 import ShareScreen from "./src/screens/ShareScreen";
+import TradeScreen from "./src/screens/TradeScreen";
 import { UpgradeContext } from "./src/components/Upgrade";
 
 // The sidebar (tablets and desktop) shows every section; the phone tab bar shows the first four plus "More"
 const SECTIONS = [
   { key: "today", label: "Today", icon: "sunny" },
   { key: "copilot", label: "Copilot", icon: "sparkles" },
-  { key: "research", label: "Research", icon: "search" },
+  { key: "trade", label: "Trade", icon: "swap-vertical" },
   { key: "portfolio", label: "Portfolio", icon: "pie-chart" },
+  { key: "research", label: "Research", icon: "search", section: "summary", sub: "AI briefings from SEC filings" },
   { key: "markets", label: "Markets", icon: "globe", section: "markets", sub: "Indexes, sectors, movers and heatmap" },
   { key: "journal", label: "Journal", icon: "journal", section: "journal", sub: "Trades, stats, rules and AI coach" },
   { key: "screener", label: "Screener", icon: "funnel", section: "screener", sub: "Find stocks in plain English" },
@@ -202,6 +204,7 @@ function Shell() {
   else if (top?.type === "automations") screen = <AutomationsScreen onBack={pop} />;
   else if (top?.type === "legal") screen = <LegalScreen doc={top.doc} onBack={pop} onChange={(doc) => setStack((st) => [...st.slice(0, -1), { type: "legal", doc }])} />;
   else if (tab === "today") screen = <TodayScreen onOpenStock={openStock} />;
+  else if (tab === "trade") screen = <TradeScreen onOpenStock={openStock} />;
   else if (tab === "markets") screen = <MarketsScreen onOpenStock={openStock} />;
   else if (tab === "screener") screen = <ScreenerScreen onOpenStock={openStock} />;
   else if (tab === "portfolio") screen = <PortfolioScreen onOpenStock={openStock} onOpenTax={() => goTab("tax")} />;

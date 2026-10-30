@@ -39,13 +39,14 @@ export async function getSettings(user) {
   return writeSettings(user.id, { email: user.email ?? null, referral_code: newCode(), brief_enabled: true, rules: {} });
 }
 
-const ALLOWED = new Set(["brief_enabled", "timezone", "experience", "goals"]);
+const ALLOWED = new Set(["brief_enabled", "weekly_email", "timezone", "experience", "goals"]);
 export async function updateSettings(user, fields) {
   await getSettings(user);
   const clean = Object.fromEntries(Object.entries(fields ?? {}).filter(([k]) => ALLOWED.has(k)));
   if ("experience" in clean && !EXPERIENCE.includes(clean.experience)) delete clean.experience;
   if ("goals" in clean) clean.goals = (Array.isArray(clean.goals) ? clean.goals : []).filter((g) => GOALS.includes(g));
   if ("brief_enabled" in clean) clean.brief_enabled = Boolean(clean.brief_enabled);
+  if ("weekly_email" in clean) clean.weekly_email = Boolean(clean.weekly_email);
   return writeSettings(user.id, clean);
 }
 
@@ -124,6 +125,7 @@ export async function referralStats(user) {
 // Every table that holds a user's rows (children before parents)
 const USER_TABLES = [
   "copilot_actions", "copilot_messages", "copilot_conversations", "copilot_tasks",
+  "paper_orders", "paper_positions", "paper_accounts", "live_orders", "cancel_feedback",
   "trades", "holdings", "alerts", "notifications", "push_tokens", "watchlist", "daily_briefs",
   "usage_events", "ai_usage", "shares", "broker_connections", "advisor_memories", "chat_messages",
   "guardrail_events", "feedback", "briefings", "subscriptions", "user_settings",

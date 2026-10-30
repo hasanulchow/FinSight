@@ -12,16 +12,21 @@ import { shareBriefing, shareJournal, getShare } from "../lib/shares.js";
 import { adminMetrics, isAdmin, requireAdmin } from "../lib/admin.js";
 import { track, CLIENT_EVENTS } from "../lib/analytics.js";
 import { db } from "../lib/db.js";
+import { reportError } from "../lib/monitoring.js";
 
 // Routes for the proactive agent (morning brief, thesis tracker, automations), trading discipline
 // (rules checklist, option P/L explainer, tax), broker sync, and launch basics
 // (onboarding, settings, referrals, sharing, account deletion, analytics, admin metrics).
 
+
 const handle = (fn) => async (req, res) => {
   try {
     await fn(req, res);
   } catch (err) {
-    if ((err.status ?? 500) >= 500) console.error(`${req.method} ${req.path}:`, err.message);
+    if ((err.status ?? 500) >= 500) {
+      console.error(`${req.method} ${req.path}:`, err.message);
+      reportError(err, { route: req.path, userId: req.user?.id });
+    }
     if (!res.headersSent) res.status(err.status ?? 500).json({ error: err.message, ...(err.upgrade != null && { upgrade: err.upgrade }) });
   }
 };

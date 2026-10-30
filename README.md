@@ -1,6 +1,6 @@
 # FinSight: AI stock research for traders and investors
 
-Type a ticker and get an AI briefing in about a minute: live quote, chart and technical analysis, multi-year financials from SEC XBRL data, business and risk summaries from the latest 10-K, earnings and insider activity, and talking points. Ask the **Copilot**, an AI agent that uses 18 FinSight tools and proposes alerts, holdings and journal entries for you to confirm. Keep a **trade journal** with an AI coach, size positions to your risk, compare your portfolio with SPY, and scan any stock for red flags. Add smart alerts, a natural-language screener and a Portfolio X-ray. Every weekday morning an agent briefs you on what changed for your stocks and re-checks your investment theses. Free and Pro plans (with a free trial), billed with Stripe. Works on iPhone, iPad, Android and the web. Every briefing is checked by compliance guardrails and scored by an LLM judge plus automated checks.
+Type a ticker and get an AI briefing in about a minute: live quote, chart and technical analysis, multi-year financials from SEC XBRL data, business and risk summaries from the latest 10-K, earnings and insider activity, and talking points. Ask the **Copilot**, an AI agent that uses 18 FinSight tools and proposes alerts, holdings and journal entries for you to confirm. Keep a **trade journal** with an AI coach, size positions to your risk, compare your portfolio with SPY, and scan any stock for red flags. Add smart alerts, a natural-language screener and a Portfolio X-ray. Every weekday morning an agent briefs you on what changed for your stocks and re-checks your investment theses. Free and Pro plans (with a free trial), billed with Stripe. Practice trading with $100k of paper money, or trade with real money through your own broker. Works on iPhone, iPad, Android and the web. Every briefing is checked by compliance guardrails and scored by an LLM judge plus automated checks.
 
 **Stack:** React Native (Expo) · Node.js (Express) · Claude Sonnet 5.5 · Supabase (Postgres + Auth) · SEC EDGAR · Finnhub · Massive (prices) · Voyage AI (embeddings) · Render or Vercel
 
@@ -154,13 +154,27 @@ Without Stripe keys, everyone stays on Free and upgrades are hidden. In local mo
 
 The legal texts are starting templates written for FinSight's actual features. Have a lawyer review them, and fill in your company details, before charging customers.
 
+### Trading, earnings, email and production hardening (v1.6)
+
+| Feature | What it does | Where |
+|---|---|---|
+| **Paper trading** | A practice brokerage account with $100,000 (`PAPER_STARTING_CASH`) and live prices. Supports market, limit and stop orders, good for the day or until cancelled. Market orders fill at the last price during NYSE hours and otherwise wait for the open. Resting orders are checked against live prices by the scheduled job and whenever the account loads. Buying power reserves cash for open buy orders, and you can only sell shares you hold (long only). Each sell writes a closed trade to the journal (setup `paper`), so the coach and stats include practice trades. The account can be reset. | `lib/paper.js` |
+| **Real trading through your broker** | Uses SnapTrade trading for brokers that support it. Every order takes two steps: the broker returns a preview (price, commission, cash after), then the user ticks a real-money acknowledgement and confirms. A preview expires after 4 minutes, and every preview and placement is logged in `live_orders`. It's off unless `BROKER_TRADING_ENABLED=true`, and the Copilot can never place a real order. | `lib/broker.js` |
+| **Order ticket** | Buy and Sell from the Trade tab or any stock page, then review and place. Your pre-trade rules run on buy orders. | `OrderSheet`, `TradeScreen` |
+| **Earnings companion** | Shows the move options are pricing in (the first expiration after the reaction day) against the stock's actual moves after its last 8 reports. Before-open reports are measured from the prior close to the report-day close; after-close reports from the report-day close to the next close. Also shows estimates, beat history and an AI preview. The Today tab lists upcoming reports for your stocks, holders get a heads-up on report day, and a recap is available after the report. | `lib/earnings.js` |
+| **Weekly email** | Sunday report: portfolio vs SPY, the week's trades, the paper account, earnings ahead and thesis changes. Sent with Resend, with one-click unsubscribe (signed link and `List-Unsubscribe`) and a test send from Account. | `lib/email.js` |
+| **Annual plan + cancel flow** | Monthly or yearly checkout (`STRIPE_PRICE_PRO_ANNUAL`). Cancelling asks for a reason, then offers a fitting alternative: pause billing for a month, a retention coupon (`STRIPE_RETENTION_COUPON`) or switching to yearly, before cancelling at the end of the period. Reasons are stored in `cancel_feedback`, and a pending cancel can be resumed. | `lib/billing.js` |
+| **Hardening** | Per-IP rate limits (240 reads and 60 writes per minute; Stripe webhook and cron exempt). Sentry error monitoring (`SENTRY_DSN`) with request bodies and auth headers stripped. AI provider failures (billing, keys, overload) become a friendly 503 and are reported. An 18-test suite (`npm test`) and GitHub Actions CI (syntax check, tests and an app web build). | `lib/rateLimit.js`, `lib/monitoring.js`, `server/test/`, `.github/workflows/ci.yml` |
+
+**Before turning on real trading:** get SnapTrade's trading plan, confirm which brokers allow it, and have a lawyer review your disclosures and terms. FinSight routes users' own orders to their own brokers. It never holds money, and its AI never recommends trades.
+
 ## Setup
 
 **Requirements:** Node.js 22 or later (Expo SDK 58 and supabase-js need it), and the Expo Go app on your phone.
 
 ### 1. Supabase
 1. Create a project at supabase.com.
-2. In the SQL editor, run `supabase/schema.sql`, then `supabase/002_memory_guardrails_embeddings.sql` (pgvector, memory, chat, guardrail log), then `supabase/003_trading_features.sql` (price cache, alerts, notifications, push tokens, screener, earnings cache, holdings), then `supabase/004_options_markets.sql` (shared cache for options and market data), then `supabase/005_copilot_journal_billing.sql` (journal, Copilot, plans, usage and subscriptions), then `supabase/006_proactive_growth.sql` (settings and onboarding, watchlist and theses, morning briefs, automations, broker connections, AI cost log, share links).
+2. In the SQL editor, run `supabase/schema.sql`, then `supabase/002_memory_guardrails_embeddings.sql` (pgvector, memory, chat, guardrail log), then `supabase/003_trading_features.sql` (price cache, alerts, notifications, push tokens, screener, earnings cache, holdings), then `supabase/004_options_markets.sql` (shared cache for options and market data), then `supabase/005_copilot_journal_billing.sql` (journal, Copilot, plans, usage and subscriptions), then `supabase/006_proactive_growth.sql` (settings and onboarding, watchlist and theses, morning briefs, automations, broker connections, AI cost log, share links), then `supabase/007_trading_email_billing.sql` (paper trading, live orders, weekly email, annual plan and cancel feedback).
 3. Authentication → Providers → Email: enabled. For a quick demo, turn off "Confirm email".
 4. Authentication → URL Configuration: set Site URL to your deployed URL (e.g. `https://finsight.onrender.com`) and add it plus `http://localhost:3001` under Redirect URLs, so confirmation emails link back to the app.
 5. Project Settings → API: copy the URL, the anon key and the service-role key.
@@ -189,7 +203,15 @@ npx expo start            # scan the QR code with Expo Go
 ```
 On a phone, `localhost` refers to the phone itself. Set `EXPO_PUBLIC_API_URL` to your computer's LAN IP (e.g. `http://192.168.1.20:3001`) or to the Vercel URL.
 
-### 5. Offline eval
+### 5. Tests
+```bash
+cd server
+npm test                  # unit tests (offline, local mode)
+npm run check             # syntax-checks every source file
+```
+CI runs both, plus an app web build, on every push and pull request.
+
+### 6. Offline eval
 ```bash
 cd server
 npm run eval              # all golden tickers (8 Claude calls each)
@@ -255,6 +277,11 @@ All routes need `Authorization: Bearer <Supabase access token>`.
 | GET | `/share/:token` | Public share snapshot (no auth) |
 | POST | `/events` | Allow-listed client analytics events |
 | GET | `/admin/metrics` | Business dashboard (admins only) |
+| GET / POST / DELETE | `/paper`, `/paper/orders/preview`, `/paper/orders`, `/paper/orders/:id`, `/paper/reset` | Paper account, order preview (with rules check), place, cancel, reset |
+| GET / POST | `/live/accounts`, `/live/orders`, `/live/orders/preview`, `/live/orders/:id/place` | Real orders through the user's broker: accounts, history, preview, confirm (`{ confirm: true }`) |
+| GET | `/earnings/upcoming`, `/stocks/:ticker/earnings-preview`, `/stocks/:ticker/earnings-recap` | Earnings companion |
+| GET / POST | `/email/preview`, `/email/test`, `/email/unsubscribe` | Weekly report preview, test send, one-click unsubscribe |
+| GET / POST | `/billing/cancel-reasons`, `/billing/cancel` | Cancel flow: `{ action: pause \| discount \| cancel \| resume, reason, feedback }` |
 
 ## Known limitations
 

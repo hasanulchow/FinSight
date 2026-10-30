@@ -61,6 +61,18 @@ services:
         sync: false
       - key: ADMIN_EMAILS # who can open the founder dashboard
         sync: false
+      - key: BROKER_TRADING_ENABLED # real-money orders via SnapTrade; keep false until legal sign-off
+        value: "false"
+      - key: RESEND_API_KEY # weekly email reports (optional)
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: STRIPE_PRICE_PRO_ANNUAL # yearly plan (optional)
+        sync: false
+      - key: STRIPE_RETENTION_COUPON # cancel-flow discount (optional)
+        sync: false
+      - key: SENTRY_DSN # error monitoring (optional)
+        sync: false
       # Baked into the web bundle at build time: Supabase URL + anon/publishable key only
       - key: EXPO_PUBLIC_SUPABASE_URL
         sync: false

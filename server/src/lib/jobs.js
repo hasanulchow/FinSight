@@ -5,6 +5,10 @@ import { sendDailyDigests } from "./portfolio.js";
 import { sendMorningBriefs } from "./brief.js";
 import { runThesisChecks } from "./watchlist.js";
 import { runDueTasks } from "./tasks.js";
+import { runPaperOrders } from "./paper.js";
+import { sendEarningsHeadsUps } from "./earnings.js";
+import { sendWeeklyEmails } from "./email.js";
+import { reportError } from "./monitoring.js";
 
 // Scheduled work. Triggered by:
 //   - GET/POST /jobs/run with "Authorization: Bearer $CRON_SECRET" (Vercel Cron, Render Cron, any scheduler), or
@@ -12,7 +16,7 @@ import { runDueTasks } from "./tasks.js";
 
 let running = false;
 
-export async function runJobs({ tasks = ["alerts", "screener", "digests", "briefs", "theses", "automations"], force = false } = {}) {
+export async function runJobs({ tasks = ["alerts", "screener", "digests", "briefs", "theses", "automations", "paper", "earnings", "emails"], force = false } = {}) {
   if (running) return { skipped: "previous run still in progress" };
   running = true;
   const started = Date.now();
@@ -27,6 +31,10 @@ export async function runJobs({ tasks = ["alerts", "screener", "digests", "brief
     if (tasks.includes("theses") && (force || (hour >= 10 && hour <= 15))) result.theses = await runThesisChecks().catch((e) => ({ error: e.message }));
     if (tasks.includes("briefs")) result.briefs = await sendMorningBriefs({ force }).catch((e) => ({ error: e.message }));
     if (tasks.includes("automations")) result.automations = await runDueTasks().catch((e) => ({ error: e.message }));
+    if (tasks.includes("paper")) result.paper = await runPaperOrders().catch((e) => ({ error: e.message }));
+    if (tasks.includes("earnings") && (force || (hour >= 11 && hour <= 14))) result.earnings = await sendEarningsHeadsUps().catch((e) => ({ error: e.message }));
+    if (tasks.includes("emails")) result.emails = await sendWeeklyEmails({ force }).catch((e) => ({ error: e.message }));
+    for (const [name, r] of Object.entries(result)) if (r?.error) reportError(new Error(`Job ${name}: ${r.error}`), { where: "jobs" });
   } finally {
     running = false;
   }

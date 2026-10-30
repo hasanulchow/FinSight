@@ -1,3 +1,4 @@
+import { initMonitoring, reportError } from "./lib/monitoring.js";
 import express from "express";
 import cors from "cors";
 import { existsSync } from "node:fs";
@@ -16,11 +17,17 @@ import { evalSummary } from "./lib/evalSummary.js";
 import { registerTradingRoutes } from "./routes/trading.js";
 import { registerSaasRoutes } from "./routes/saas.js";
 import { registerGrowthRoutes } from "./routes/growth.js";
+import { registerTradeRoutes } from "./routes/trade.js";
+import { rateLimit } from "./lib/rateLimit.js";
 import { checkQuota, recordUsage } from "./lib/plans.js";
 import { startScheduler } from "./lib/jobs.js";
 
+initMonitoring();
+
 const app = express();
+app.set("trust proxy", 1); // Render and Vercel sit behind one proxy: use the real client IP for rate limits
 app.use(cors());
+app.use(rateLimit());
 // Keep the raw bytes too: Stripe webhook signatures are computed over the exact request body
 app.use(express.json({ limit: "1mb", verify: (req, _res, buf) => { req.rawBody = buf; } }));
 
@@ -300,6 +307,14 @@ registerTradingRoutes(app);
 // Copilot, journal, risk tools, red flags, plans and billing
 registerSaasRoutes(app);
 registerGrowthRoutes(app);
+registerTradeRoutes(app);
+
+// Last resort for errors thrown outside the route helpers
+app.use((err, req, res, _next) => {
+  console.error(`${req.method} ${req.path}:`, err.message);
+  reportError(err, { route: req.path, userId: req.user?.id });
+  if (!res.headersSent) res.status(err.status ?? 500).json({ error: err.status && err.status < 500 ? err.message : "Something went wrong on our side." });
+});
 
 // Vercel imports the app as a function (api/index.js); everywhere else, run a normal server.
 if (!process.env.VERCEL) {

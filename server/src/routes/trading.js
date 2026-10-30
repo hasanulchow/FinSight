@@ -17,6 +17,7 @@ import { optionsAnalyst } from "../agents/optionsAnalyst.js";
 import { runBacktest, BACKTEST_STRATEGIES } from "../lib/backtest.js";
 import { getMarketOverview, compareTickers } from "../lib/market.js";
 import { getEarningsCalendar } from "../tools/quote.js";
+import { reportError } from "../lib/monitoring.js";
 
 // Routes for the trading features: technical analysis, alerts + notifications, screener,
 // earnings & insiders, portfolio X-ray, and the scheduled-jobs trigger.
@@ -30,11 +31,13 @@ async function aiQuota(userId, tool) {
 }
 
 // Wraps async handlers: errors with .status become that HTTP status
+
 const handle = (fn) => async (req, res) => {
   try {
     await fn(req, res);
   } catch (err) {
     console.error(`${req.method} ${req.path}:`, err.message);
+    if ((err.status ?? 500) >= 500) reportError(err, { route: req.path, userId: req.user?.id });
     if (!res.headersSent) res.status(err.status ?? 500).json({ error: err.message, ...(err.upgrade != null && { upgrade: err.upgrade }) });
   }
 };

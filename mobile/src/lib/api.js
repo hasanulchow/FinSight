@@ -103,7 +103,7 @@ export const api = {
   // Plans and billing
   plans: () => request("/plans"),
   account: () => request("/account"),
-  checkout: (returnUrl) => request("/billing/checkout", { method: "POST", body: JSON.stringify({ return_url: returnUrl }) }),
+  checkout: (returnUrl, interval = "month") => request("/billing/checkout", { method: "POST", body: JSON.stringify({ return_url: returnUrl, interval }) }),
   billingPortal: (returnUrl) => request("/billing/portal", { method: "POST", body: JSON.stringify({ return_url: returnUrl }) }),
 
   // Account, onboarding, referrals
@@ -150,4 +150,27 @@ export const api = {
 
   // Admin
   adminMetrics: () => request("/admin/metrics"),
+
+  // Paper trading
+  paper: () => request("/paper"),
+  paperPreview: (order) => request("/paper/orders/preview", { method: "POST", body: JSON.stringify(order) }),
+  paperOrder: (order) => request("/paper/orders", { method: "POST", body: JSON.stringify(order) }),
+  paperCancel: (id) => request(`/paper/orders/${id}`, { method: "DELETE" }),
+  paperReset: () => request("/paper/reset", { method: "POST", body: JSON.stringify({ confirm: true }) }),
+
+  // Live trading through the user's broker (preview, then confirm)
+  liveAccounts: () => request("/live/accounts"),
+  liveOrders: () => request("/live/orders"),
+  livePreview: (order) => request("/live/orders/preview", { method: "POST", body: JSON.stringify(order) }),
+  livePlace: (id) => request(`/live/orders/${id}/place`, { method: "POST", body: JSON.stringify({ confirm: true }) }),
+
+  // Earnings companion
+  earningsUpcoming: (days = 14) => request(`/earnings/upcoming?days=${days}`),
+  earningsPreview: (ticker) => request(`/stocks/${encodeURIComponent(ticker)}/earnings-preview`),
+  earningsRecap: (ticker) => request(`/stocks/${encodeURIComponent(ticker)}/earnings-recap`),
+
+  // Email + billing extras
+  emailTest: () => request("/email/test", { method: "POST" }),
+  cancelReasons: () => request("/billing/cancel-reasons"),
+  cancelFlow: (body) => request("/billing/cancel", { method: "POST", body: JSON.stringify(body) }),
 };

@@ -44,7 +44,8 @@ const FAQ = [
   ["Is this investment advice?", "No. FinSight explains data and filings in plain language. It never recommends buying, selling or holding, and every screen says so."],
   ["How accurate are the AI briefings?", "Numbers come from code, not the AI. Each briefing is checked for quotes that really appear in the filing and numbers that match the source data, then scored by an independent AI judge."],
   ["What does it cost?", "FinSight is free to start, with daily limits on the AI features. Pro raises every limit (300 Copilot messages a day, 40 briefings, 100 alerts), and you can cancel anytime."],
-  ["Will the Copilot trade or change things on its own?", "No. It can't place trades, and anything it wants to change in your account, like an alert or a journal entry, waits for you to tap Confirm."],
+  ["Will the Copilot trade or change things on its own?", "No. The Copilot can never place real trades. Anything it suggests changing, like an alert, a journal entry or a practice order, waits for you to tap Confirm."],
+  ["Can I trade in FinSight?", "Yes. Practice with $100,000 of paper money and live prices. Where your broker supports it, you can also place real orders in your own brokerage account; you review and confirm every order, and your money stays at your broker."],
   ["Does it work on my phone?", "Yes. FinSight runs on iOS, Android and the web, with push notifications for alerts on mobile."],
 ];
 

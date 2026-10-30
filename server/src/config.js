@@ -29,6 +29,8 @@ export const config = {
   stripeKey: process.env.STRIPE_SECRET_KEY || null,
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET || null,
   stripePricePro: process.env.STRIPE_PRICE_PRO || null,
+  stripePriceProAnnual: process.env.STRIPE_PRICE_PRO_ANNUAL || null, // optional yearly price
+  stripeRetentionCoupon: process.env.STRIPE_RETENTION_COUPON || null, // optional coupon offered in the cancel flow
   appUrl: process.env.APP_URL || "http://localhost:3001",
   // Guardrails: per-user limits over a rolling hour
   briefingsPerHour: Number(process.env.BRIEFINGS_PER_HOUR || 20),
