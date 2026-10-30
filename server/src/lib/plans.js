@@ -18,7 +18,7 @@ export const PLANS = {
       ai_tool: num("FREE_AI_TOOLS_PER_DAY", 10), // screener, chart/options explanations, X-ray, journal coach
       question: num("FREE_QUESTIONS_PER_DAY", 10), // Ask the 10-K
     },
-    caps: { alerts: 5, holdings: 25, trades: 200, watchlist: 10, automations: 1 },
+    caps: { alerts: 5, holdings: 25, trades: 200, watchlist: 10, automations: 1, bots: 1 },
   },
   pro: {
     name: "Pro",
@@ -30,7 +30,7 @@ export const PLANS = {
       ai_tool: num("PRO_AI_TOOLS_PER_DAY", 200),
       question: num("PRO_QUESTIONS_PER_DAY", 200),
     },
-    caps: { alerts: 100, holdings: 500, trades: 20000, watchlist: 100, automations: 10 },
+    caps: { alerts: 100, holdings: 500, trades: 20000, watchlist: 100, automations: 10, bots: 10 },
   },
 };
 

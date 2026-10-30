@@ -205,6 +205,14 @@
     {
       "source": "/email/:path*",
       "destination": "/api"
+    },
+    {
+      "source": "/bots",
+      "destination": "/api"
+    },
+    {
+      "source": "/bots/:path*",
+      "destination": "/api"
     }
   ],
   "crons": [

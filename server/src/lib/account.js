@@ -125,7 +125,7 @@ export async function referralStats(user) {
 // Every table that holds a user's rows (children before parents)
 const USER_TABLES = [
   "copilot_actions", "copilot_messages", "copilot_conversations", "copilot_tasks",
-  "paper_orders", "paper_positions", "paper_accounts", "live_orders", "cancel_feedback",
+  "bot_signals", "trading_bots", "paper_orders", "paper_positions", "paper_accounts", "live_orders", "cancel_feedback",
   "trades", "holdings", "alerts", "notifications", "push_tokens", "watchlist", "daily_briefs",
   "usage_events", "ai_usage", "shares", "broker_connections", "advisor_memories", "chat_messages",
   "guardrail_events", "feedback", "briefings", "subscriptions", "user_settings",

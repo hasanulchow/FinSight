@@ -24,6 +24,7 @@ import { explainOptionPnl } from "./optionPnl.js";
 import { taxSummary } from "./tax.js";
 import { earningsPreview } from "./earnings.js";
 import { getPaperAccount, placePaperOrder } from "./paper.js";
+import { detectBullFlag } from "./patterns.js";
 
 // FinSight Copilot: an agent that answers questions by calling the app's own tools
 // (market data, technicals, options, backtests, screener, portfolio, journal, filings, red flags).
@@ -84,6 +85,7 @@ export const TOOLS = [
     exit_underlying: { type: "number", description: "Optional stock price at exit" },
   }, ["ticker", "type", "strike", "expiration", "entry_date", "entry_price", "exit_price"]),
   t("get_earnings_preview", "Before an earnings report: date and timing, the move options are pricing in vs the stock's past post-earnings moves, analyst estimates, beat history and what to watch.", { ticker }, ["ticker"]),
+  t("scan_chart_patterns", "Check one stock's daily chart for a bull flag: pole, flag, breakout level, stop level, measured-move target and whether it is forming or breaking out.", { ticker }, ["ticker"]),
   t("get_paper_account", "The user's paper (practice) trading account: cash, buying power, positions with P/L, open orders."),
   t("get_tax_summary", "The user's realized gains this year (short vs long term), possible wash sales, and tax-loss harvesting candidates among holdings with wash-sale-safe dates. Educational, not tax advice."),
   // Actions below change user data: they are proposed to the user, who must confirm them in the app.
@@ -200,6 +202,10 @@ async function runTool(name, input, userId) {
       return explainOptionPnl(input);
     case "get_earnings_preview":
       return earningsPreview(sym(input.ticker));
+    case "scan_chart_patterns": {
+      const s = sym(input.ticker);
+      return { ticker: s, bull_flag: detectBullFlag(await getDailyBars(s)) ?? "No bull flag on the daily chart right now." };
+    }
     case "get_paper_account": {
       const a = await getPaperAccount(userId);
       return { ...a, recent_orders: a.recent_orders.slice(0, 10) };

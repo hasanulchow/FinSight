@@ -7,6 +7,7 @@ import { makeStyles, useTheme } from "../theme";
 import { Banner, Button, Disclaimer, EmptyState, Input, Loading, Pill, SectionCard, Segmented, Stat, TickerAvatar } from "../components/ui";
 import { ErrorNotice } from "../components/Upgrade";
 import OrderSheet from "../components/OrderSheet";
+import { BotsPanel } from "../components/Bots";
 // Brokerage amounts are shown in full (no K/M rounding)
 const usd = (v) => (v == null ? "–" : `${v < 0 ? "-" : ""}$${Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 
@@ -77,9 +78,8 @@ export default function TradeScreen({ onOpenStock }) {
 
   return (
     <ScrollView contentContainerStyle={s.scroll} refreshControl={<RefreshControl refreshing={loading && !!acct} onRefresh={load} tintColor={c.primary} />}>
-      {(liveAvailable || broker?.trading_enabled) && (
-        <Segmented options={[["paper", "Practice"], ["live", "Real money"]]} value={mode} onChange={setMode} />
-      )}
+      <Segmented options={[["paper", "Practice"], ["bots", "Bots"], ...(liveAvailable || broker?.trading_enabled ? [["live", "Real money"]] : [])]} value={mode} onChange={setMode} />
+      {mode === "bots" && <BotsPanel onOpenStock={onOpenStock} />}
       <ErrorNotice error={error} />
 
       {mode === "paper" && (

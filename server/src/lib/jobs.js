@@ -6,6 +6,7 @@ import { sendMorningBriefs } from "./brief.js";
 import { runThesisChecks } from "./watchlist.js";
 import { runDueTasks } from "./tasks.js";
 import { runPaperOrders } from "./paper.js";
+import { runAllBots } from "./bots.js";
 import { sendEarningsHeadsUps } from "./earnings.js";
 import { sendWeeklyEmails } from "./email.js";
 import { reportError } from "./monitoring.js";
@@ -16,7 +17,7 @@ import { reportError } from "./monitoring.js";
 
 let running = false;
 
-export async function runJobs({ tasks = ["alerts", "screener", "digests", "briefs", "theses", "automations", "paper", "earnings", "emails"], force = false } = {}) {
+export async function runJobs({ tasks = ["alerts", "screener", "digests", "briefs", "theses", "automations", "paper", "bots", "earnings", "emails"], force = false } = {}) {
   if (running) return { skipped: "previous run still in progress" };
   running = true;
   const started = Date.now();
@@ -32,6 +33,8 @@ export async function runJobs({ tasks = ["alerts", "screener", "digests", "brief
     if (tasks.includes("briefs")) result.briefs = await sendMorningBriefs({ force }).catch((e) => ({ error: e.message }));
     if (tasks.includes("automations")) result.automations = await runDueTasks().catch((e) => ({ error: e.message }));
     if (tasks.includes("paper")) result.paper = await runPaperOrders().catch((e) => ({ error: e.message }));
+    // After resting orders: bots scan, enter on breakouts and manage their stops and targets
+    if (tasks.includes("bots")) result.bots = await runAllBots().catch((e) => ({ error: e.message }));
     if (tasks.includes("earnings") && (force || (hour >= 11 && hour <= 14))) result.earnings = await sendEarningsHeadsUps().catch((e) => ({ error: e.message }));
     if (tasks.includes("emails")) result.emails = await sendWeeklyEmails({ force }).catch((e) => ({ error: e.message }));
     for (const [name, r] of Object.entries(result)) if (r?.error) reportError(new Error(`Job ${name}: ${r.error}`), { where: "jobs" });

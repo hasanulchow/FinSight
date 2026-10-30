@@ -8,6 +8,7 @@ import TechnicalsCard from "../components/TechnicalsCard";
 import EventsCard from "../components/EventsCard";
 import AlertSheet from "../components/AlertSheet";
 import RedFlagsCard from "../components/RedFlagsCard";
+import { PatternCard } from "../components/Bots";
 import PositionSizerSheet from "../components/PositionSizerSheet";
 import OrderSheet from "../components/OrderSheet";
 import EarningsSheet from "../components/EarningsSheet";
@@ -109,6 +110,8 @@ export default function StockScreen({ ticker, onBack, onBrief, onOptions, onBack
       {!tech && !techError && <Loading text="Loading chart and indicators…" />}
       {techError && <Banner tone="warn">Chart unavailable: {techError}</Banner>}
       {tech && <TechnicalsCard snapshot={tech.snapshot} chart={tech.chart} analysis={tech.analysis} onExplain={explain} explaining={explaining} />}
+
+      <PatternCard ticker={ticker} />
 
       <RedFlagsCard ticker={ticker} />
 

@@ -173,4 +173,17 @@ export const api = {
   emailTest: () => request("/email/test", { method: "POST" }),
   cancelReasons: () => request("/billing/cancel-reasons"),
   cancelFlow: (body) => request("/billing/cancel", { method: "POST", body: JSON.stringify(body) }),
+
+  // Trading bots + patterns
+  botTemplates: () => request("/bots/templates"),
+  bots: () => request("/bots"),
+  createBot: (bot) => request("/bots", { method: "POST", body: JSON.stringify(bot) }),
+  updateBot: (id, fields) => request(`/bots/${id}`, { method: "PATCH", body: JSON.stringify(fields) }),
+  deleteBot: (id) => request(`/bots/${id}`, { method: "DELETE" }),
+  botSignals: (id) => request(`/bots/${id}/signals`),
+  runBot: (id) => request(`/bots/${id}/run`, { method: "POST" }),
+  backtestBot: (id) => request(`/bots/${id}/backtest`, { method: "POST" }),
+  backtestConfig: (config) => request("/bots/backtest", { method: "POST", body: JSON.stringify({ config }) }),
+  patterns: (ticker) => request(`/stocks/${encodeURIComponent(ticker)}/patterns`),
+  marketRegime: () => request("/market/regime"),
 };

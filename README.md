@@ -168,6 +168,31 @@ The legal texts are starting templates written for FinSight's actual features. H
 
 **Before turning on real trading:** get SnapTrade's trading plan, confirm which brokers allow it, and have a lawyer review your disclosures and terms. FinSight routes users' own orders to their own brokers. It never holds money, and its AI never recommends trades.
 
+### Trading bots (v1.8)
+
+Rule-based strategies in **Trade → Bots**. The first template is the **bull flag breakout**:
+
+1. **Detect** (`lib/patterns.js`, on daily bars). A pole is a rise of at least 8% within 3 to 12 bars. A flag follows: 3 to 15 bars that stay under the pole top, give back at most 50% of the pole, and drift flat or down, ideally on lighter volume.
+2. **Market filter.** Trade only when the market is healthy. The default is SPY above its 200-day; "strong uptrend" (above a rising 50-day that is above the 200-day) and "any" are options.
+3. **Enter.** Either the moment price breaks the flag high (plus a 0.1% buffer), or after a daily close above it, optionally with 1.5× volume.
+4. **Exit.** Stop just under the flag low (or 2× ATR). Target is the measured move (the pole height added to the breakout), 2R or 3R. A time stop exits after N days.
+5. **Size.** Risk a set percentage of the account per trade, capped by a maximum position size and buying power, with a limit on open positions.
+
+**Modes:**
+- **Paper:** the bot trades the practice account by itself. It enters, places the stop, sells at the target, and exits at the time stop.
+- **Alert:** the bot sends the exact plan (entry, stop, target, shares) for you to place, for example as a real order through your broker. Bots never place real-money orders.
+
+Every bot has a backtest over about 2 years of daily bars, with results in R. The stock page shows a bull flag card (levels plus "alert me above the breakout"), and the Copilot can scan any chart for the pattern.
+
+**What the backtest showed** (12 large caps, about 2 years, intraday breakout entry):
+
+| Market filter | Avg per trade | Win rate | Profit factor |
+|---|---|---|---|
+| SPY above its 200-day | +0.17R | 41% | 1.30 |
+| Strong uptrend | −0.22R | 26% | 0.68 |
+
+That result is why SPY above its 200-day is the default. It's a small sample, and past results don't predict future returns.
+
 ### Brand and design system (v1.7)
 
 - **Logo:** a lens with a trend line rising inside it and breaking out, ending in a cyan spark ("insight into where things are going"). The master is `mobile/assets/brand/mark.svg`, and `components/Brand.js` renders it in the app. `assets/brand/render-icons.mjs` (run with `sharp`) produces the iOS/Android icons, the adaptive icon, the splash icon and the favicon.
@@ -181,7 +206,7 @@ The legal texts are starting templates written for FinSight's actual features. H
 
 ### 1. Supabase
 1. Create a project at supabase.com.
-2. In the SQL editor, run `supabase/schema.sql`, then `supabase/002_memory_guardrails_embeddings.sql` (pgvector, memory, chat, guardrail log), then `supabase/003_trading_features.sql` (price cache, alerts, notifications, push tokens, screener, earnings cache, holdings), then `supabase/004_options_markets.sql` (shared cache for options and market data), then `supabase/005_copilot_journal_billing.sql` (journal, Copilot, plans, usage and subscriptions), then `supabase/006_proactive_growth.sql` (settings and onboarding, watchlist and theses, morning briefs, automations, broker connections, AI cost log, share links), then `supabase/007_trading_email_billing.sql` (paper trading, live orders, weekly email, annual plan and cancel feedback).
+2. In the SQL editor, run `supabase/schema.sql`, then `supabase/002_memory_guardrails_embeddings.sql` (pgvector, memory, chat, guardrail log), then `supabase/003_trading_features.sql` (price cache, alerts, notifications, push tokens, screener, earnings cache, holdings), then `supabase/004_options_markets.sql` (shared cache for options and market data), then `supabase/005_copilot_journal_billing.sql` (journal, Copilot, plans, usage and subscriptions), then `supabase/006_proactive_growth.sql` (settings and onboarding, watchlist and theses, morning briefs, automations, broker connections, AI cost log, share links), then `supabase/007_trading_email_billing.sql` (paper trading, live orders, weekly email, annual plan and cancel feedback), then `supabase/008_trading_bots.sql` (trading bots and their signals).
 3. Authentication → Providers → Email: enabled. For a quick demo, turn off "Confirm email".
 4. Authentication → URL Configuration: set Site URL to your deployed URL (e.g. `https://finsight.onrender.com`) and add it plus `http://localhost:3001` under Redirect URLs, so confirmation emails link back to the app.
 5. Project Settings → API: copy the URL, the anon key and the service-role key.
@@ -288,6 +313,9 @@ All routes need `Authorization: Bearer <Supabase access token>`.
 | GET / POST | `/live/accounts`, `/live/orders`, `/live/orders/preview`, `/live/orders/:id/place` | Real orders through the user's broker: accounts, history, preview, confirm (`{ confirm: true }`) |
 | GET | `/earnings/upcoming`, `/stocks/:ticker/earnings-preview`, `/stocks/:ticker/earnings-recap` | Earnings companion |
 | GET / POST | `/email/preview`, `/email/test`, `/email/unsubscribe` | Weekly report preview, test send, one-click unsubscribe |
+| GET / POST / PATCH / DELETE | `/bots`, `/bots/:id`, `/bots/templates` | Trading bots |
+| POST | `/bots/:id/run`, `/bots/:id/backtest`, `/bots/backtest` | Run a bot now (scan, enter or alert, manage exits); backtest a saved bot or an unsaved config |
+| GET | `/bots/:id/signals`, `/stocks/:ticker/patterns`, `/market/regime` | Bot signals, bull flag scan for one stock, SPY regime |
 | GET / POST | `/billing/cancel-reasons`, `/billing/cancel` | Cancel flow: `{ action: pause \| discount \| cancel \| resume, reason, feedback }` |
 
 ## Known limitations
