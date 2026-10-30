@@ -2,7 +2,7 @@ import { config } from "../config.js";
 import { supabase } from "./supabase.js";
 import { localStore } from "./localStore.js";
 import { db } from "./db.js";
-import { getQuoteLite } from "../tools/quote.js";
+import { withLivePrice, keepWarm } from "./stream.js";
 import { addTrade } from "./journal.js";
 import { notify } from "./notify.js";
 import { track } from "./analytics.js";
@@ -84,7 +84,7 @@ export async function getPaperAccount(userId) {
   const [positions, orders] = await Promise.all([listPositions(userId), listOrders(userId, 50)]);
   const priced = await Promise.all(
     positions.map(async (p) => {
-      const q = await getQuoteLite(p.ticker).catch(() => null);
+      const q = await withLivePrice(p.ticker).catch(() => null);
       const price = q?.price ?? p.avg_cost;
       const qty = Number(p.qty), cost = Number(p.avg_cost);
       // Bought today: today's change is the move since the fill, not the stock's whole-day move
@@ -132,7 +132,7 @@ function cleanOrder(input) {
 /** What an order would do, without placing it: estimated price and cost, buying power after, problems. */
 export async function previewPaperOrder(userId, input) {
   const o = cleanOrder(input);
-  const [acct, quote] = await Promise.all([getPaperAccount(userId), getQuoteLite(o.ticker)]);
+  const [acct, quote] = await Promise.all([getPaperAccount(userId), withLivePrice(o.ticker)]);
   const estPrice = o.type === "limit" ? o.limit_price : o.type === "stop" ? o.stop_price : quote.price;
   const cost = estPrice * o.qty;
   const held = acct.positions.find((p) => p.ticker === o.ticker)?.qty ?? 0;
@@ -162,6 +162,7 @@ export async function placePaperOrder(userId, input) {
   const row = await db.insert("paper_orders", { user_id: userId, ...o, status: "open", est_price: preview.est_price });
   track(userId, "paper_order", { side: o.side, type: o.type });
   // Market orders during market hours fill now; everything else rests until the price or the open arrives
+  if (o.type !== "market") keepWarm([o.ticker], 7 * 86_400_000); // stream resting orders' symbols so they fill on live prices
   const filled = await tryFill(userId, row, preview.quote.price, preview.market);
   return filled ?? row;
 }
@@ -223,7 +224,7 @@ export async function processOpenOrders(userId) {
   const prices = new Map();
   let filled = 0;
   for (const o of open.sort((a, b) => a.created_at.localeCompare(b.created_at))) {
-    if (!prices.has(o.ticker)) prices.set(o.ticker, (await getQuoteLite(o.ticker).catch(() => null))?.price ?? null);
+    if (!prices.has(o.ticker)) prices.set(o.ticker, (await withLivePrice(o.ticker).catch(() => null))?.price ?? null);
     const row = await tryFill(userId, o, prices.get(o.ticker), market);
     if (row?.status === "filled") {
       filled++;

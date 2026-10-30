@@ -193,6 +193,16 @@ Every bot has a backtest over about 2 years of daily bars, with results in R. Th
 
 That result is why SPY above its 200-day is the default. It's a small sample, and past results don't predict future returns.
 
+### Live market data (v1.9)
+
+- **Live chart.** The stock page embeds TradingView's free Advanced Chart widget (`components/LiveChart.js`): 1m to 1W candles that update in real time, plus drawing tools and indicators. The app loads TradingView's hosted widget page in a cross-origin iframe (web) or a WebView (iOS/Android), so their code never runs on this app's origin or sees the session. TradingView's terms require the attribution link under the chart; keep it.
+- **Streaming prices.** The server keeps one WebSocket to Finnhub (`lib/stream.js`) and relays trades to the app over its own WebSocket at `/stream` (signed in with the Supabase access token). Clients send `subscribe` and `unsubscribe`, and the server pushes changed prices every 500 ms. New symbols are seeded with the last REST quote, so prices show even when the market is closed.
+- **Where prices update live:** the stock page price, the Today watchlist, Practice account positions and equity, and the order ticket. A badge shows **Live**, **Last price** (no trades streaming, for example after hours) or **Connecting**.
+- **Paper engine and bots.** Paper fills and bot breakout triggers use the streamed price when it's fresh. Resting paper orders are checked every 60 seconds.
+- `GET /stream/status` reports whether the upstream feed is connected and how many symbols are streaming.
+
+**Limits.** Finnhub's free WebSocket allows about 50 symbols per key, so the server streams at most `STREAM_MAX_SYMBOLS` (default 50) across all users. Vercel has no WebSockets; there the stream is off and the app shows the last quote. Before charging for the app, buy a data plan that allows displaying real-time prices to your users.
+
 ### Brand and design system (v1.7)
 
 - **Logo:** a lens with a trend line rising inside it and breaking out, ending in a cyan spark ("insight into where things are going"). The master is `mobile/assets/brand/mark.svg`, and `components/Brand.js` renders it in the app. `assets/brand/render-icons.mjs` (run with `sharp`) produces the iOS/Android icons, the adaptive icon, the splash icon and the favicon.
@@ -325,3 +335,4 @@ All routes need `Authorization: Bearer <Supabase access token>`.
 - Companies with a new SEC registration and no 10-K yet (e.g. ExxonMobil's 2026 holding company) get a briefing without filing text.
 - Very long Risk Factors sections are truncated at 120k characters; the agent is told when this happens.
 - AI-generated content for internal advisor use only; not investment advice.
+- Streaming prices need a host with WebSockets (Render works; Vercel doesn't) and are capped by the Finnhub plan's symbol limit.

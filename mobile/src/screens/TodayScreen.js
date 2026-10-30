@@ -6,6 +6,7 @@ import { makeStyles, useTheme, font } from "../theme";
 import { Button, Disclaimer, EmptyState, Input, Loading, PageHeader, Pill, SectionCard, TickerAvatar } from "../components/ui";
 import { ErrorNotice } from "../components/Upgrade";
 import Sheet from "../components/Sheet";
+import { useLivePrices } from "../lib/live";
 import EarningsSheet from "../components/EarningsSheet";
 
 const greeting = () => {
@@ -26,6 +27,7 @@ export default function TodayScreen({ onOpenStock }) {
   const [checking, setChecking] = useState(null);
   const [earnings, setEarnings] = useState([]);
   const [earningsTicker, setEarningsTicker] = useState(null);
+  const live = useLivePrices(watch?.map((w) => w.ticker) ?? []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -155,6 +157,7 @@ export default function TodayScreen({ onOpenStock }) {
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <View style={s.watchHead}>
                     <Text style={s.watchTicker}>{w.ticker}</Text>
+                    <LivePrice q={live.prices[w.ticker]} />
                     {w.thesis && label ? <Pill text={label} color={color} icon={icon} /> : null}
                   </View>
                   {w.thesis ? <Text style={s.thesis} numberOfLines={2}>“{w.thesis}”</Text> : <Text style={s.muted}>No thesis yet</Text>}
@@ -177,6 +180,22 @@ export default function TodayScreen({ onOpenStock }) {
       <EarningsSheet ticker={earningsTicker} visible={!!earningsTicker} onClose={() => setEarningsTicker(null)} />
       <WatchSheet item={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />
     </ScrollView>
+  );
+}
+
+/** Price and day change from the live stream (or the last quote when the market is closed). */
+function LivePrice({ q }) {
+  const { c } = useTheme();
+  const s = useStyles();
+  if (!q?.p) return null;
+  const chg = q.pc ? ((q.p - q.pc) / q.pc) * 100 : null;
+  const color = chg == null ? c.textSecondary : chg >= 0 ? c.gain : c.loss;
+  return (
+    <View style={s.livePrice}>
+      {q.live && <View style={[s.liveDot, { backgroundColor: c.gain }]} />}
+      <Text style={s.livePriceText}>${q.p.toFixed(2)}</Text>
+      {chg != null && <Text style={[s.livePriceText, { color }]}>{chg >= 0 ? "+" : ""}{chg.toFixed(2)}%</Text>}
+    </View>
   );
 }
 
@@ -248,6 +267,9 @@ const useStyles = makeStyles((c) => ({
   watchRow: { flexDirection: "row", gap: 12, paddingVertical: 14, borderTopWidth: 1, borderTopColor: c.border },
   watchHead: { flexDirection: "row", alignItems: "center", gap: 8 },
   watchTicker: { color: c.text, fontWeight: "800", fontSize: 16 },
+  livePrice: { flexDirection: "row", alignItems: "center", gap: 6, marginLeft: "auto" },
+  liveDot: { width: 6, height: 6, borderRadius: 3 },
+  livePriceText: { color: c.text, fontSize: 13, fontWeight: "700", fontVariant: ["tabular-nums"] },
   thesis: { color: c.textSecondary, fontSize: 14, fontStyle: "italic", lineHeight: 20, marginTop: 4 },
   verdict: { color: c.text, fontSize: 13, lineHeight: 19, marginTop: 6 },
   watchActions: { flexDirection: "row", gap: 8, marginTop: 10, flexWrap: "wrap" },

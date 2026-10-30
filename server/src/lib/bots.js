@@ -1,6 +1,6 @@
 import { db } from "./db.js";
 import { getDailyBars, pricesEnabled } from "../tools/prices.js";
-import { getQuoteLite } from "../tools/quote.js";
+import { withLivePrice, keepWarm } from "./stream.js";
 import { sma, atr } from "./indicators.js";
 import { BULL_FLAG_DEFAULTS, detectBullFlag, flagEndingAt, marketRegime, regimePasses, stopFor, targetFor } from "./patterns.js";
 import { universe as largeCaps } from "./screener.js";
@@ -164,7 +164,8 @@ export async function runBot(userId, bot, { manual = false } = {}) {
       triggered = true;
       price = setup.breakout_close;
     } else if (setup.status === "forming" && cfg.entry.trigger === "intraday" && market.open) {
-      price = (await getQuoteLite(setup.ticker).catch(() => null))?.price ?? null;
+      keepWarm([setup.ticker], 24 * 3_600_000); // stream flags being watched so the break is caught live
+      price = (await withLivePrice(setup.ticker).catch(() => null))?.price ?? null;
       triggered = price != null && price >= setup.breakout_level * (1 + cfg.entry.buffer_pct / 100);
     }
     if (!triggered) {

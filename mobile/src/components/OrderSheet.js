@@ -6,6 +6,8 @@ import { makeStyles, useTheme } from "../theme";
 import { Banner, Button, Chip, Input, Segmented } from "./ui";
 import { ErrorNotice } from "./Upgrade";
 import Sheet from "./Sheet";
+import LiveBadge from "./LiveBadge";
+import { useLivePrices } from "../lib/live";
 // Brokerage amounts are shown in full (no K/M rounding)
 const usd = (v) => (v == null ? "–" : `${v < 0 ? "-" : ""}$${Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 
@@ -26,6 +28,15 @@ export default function OrderSheet({ visible, onClose, ticker: presetTicker, sid
   const [tif, setTif] = useState("gtc");
   const [accountId, setAccountId] = useState(null);
   const [preview, setPreview] = useState(null);
+  const sym = ticker.trim().toUpperCase();
+  // Stream the ticker once typing pauses, not every partial symbol
+  const [streamSym, setStreamSym] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setStreamSym(sym), 450);
+    return () => clearTimeout(t);
+  }, [sym]);
+  const stream = useLivePrices(visible && /^[A-Z][A-Z0-9.\-]{0,9}$/.test(streamSym) ? [streamSym] : []);
+  const lq = stream.prices[sym];
   const [ack, setAck] = useState(false);
   const [placed, setPlaced] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -134,6 +145,14 @@ export default function OrderSheet({ visible, onClose, ticker: presetTicker, sid
               <Input value={qty} onChangeText={edit(setQty)} keyboardType="decimal-pad" placeholder="10" />
             </View>
           </View>
+          {lq?.p != null && (
+            <View style={s.quoteRow}>
+              <Text style={s.quoteText}>{sym} ${lq.p.toFixed(2)}</Text>
+              {lq.pc ? <Text style={[s.quoteText, { color: lq.p >= lq.pc ? c.gain : c.loss }]}>{lq.p >= lq.pc ? "+" : ""}{(((lq.p - lq.pc) / lq.pc) * 100).toFixed(2)}%</Text> : null}
+              <LiveBadge status={stream.status} live={!!lq.live} />
+              {Number(qty) > 0 && <Text style={[s.hint, { marginTop: 0, marginLeft: "auto" }]}>≈ {usd(lq.p * Number(qty))}</Text>}
+            </View>
+          )}
           <Text style={s.label}>Order type</Text>
           <Segmented options={[["market", "Market"], ["limit", "Limit"], ["stop", "Stop"]]} value={type} onChange={edit(setType)} />
           {type !== "market" && (
@@ -214,6 +233,8 @@ const useStyles = makeStyles((c) => ({
   row: { flexDirection: "row", gap: 10 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
   hint: { color: c.muted, fontSize: 12, marginTop: 6, lineHeight: 17 },
+  quoteRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap" },
+  quoteText: { color: c.text, fontSize: 14, fontWeight: "700", fontVariant: ["tabular-nums"] },
   muted: { color: c.textSecondary, fontSize: 13, lineHeight: 19 },
   tifRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 14, flexWrap: "wrap" },
   review: { marginTop: 16, padding: 14, borderRadius: 16, backgroundColor: c.surfaceAlt, gap: 4 },

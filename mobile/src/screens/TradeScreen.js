@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -8,6 +8,8 @@ import { Banner, Button, Disclaimer, EmptyState, Input, Loading, Pill, SectionCa
 import { ErrorNotice } from "../components/Upgrade";
 import OrderSheet from "../components/OrderSheet";
 import { BotsPanel } from "../components/Bots";
+import LiveBadge from "../components/LiveBadge";
+import { useLivePrices } from "../lib/live";
 // Brokerage amounts are shown in full (no K/M rounding)
 const usd = (v) => (v == null ? "–" : `${v < 0 ? "-" : ""}$${Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 
@@ -18,7 +20,7 @@ export default function TradeScreen({ onOpenStock }) {
   const { c, sections } = useTheme();
   const s = useStyles();
   const [mode, setMode] = useState("paper");
-  const [acct, setAcct] = useState(null);
+  const [account, setAcct] = useState(null);
   const [broker, setBroker] = useState(null);
   const [liveAccts, setLiveAccts] = useState([]);
   const [liveOrders, setLiveOrders] = useState([]);
@@ -66,8 +68,25 @@ export default function TradeScreen({ onOpenStock }) {
     }
   }
 
+  // Re-price positions, equity and today's change on every streamed trade
+  const live = useLivePrices(account?.positions.map((p) => p.ticker) ?? []);
+  const acct = useMemo(() => {
+    if (!account) return null;
+    const positions = account.positions.map((p) => {
+      const lp = live.prices[p.ticker];
+      if (!lp?.live) return p;
+      const price = lp.p;
+      const boughtToday = String(p.opened_at ?? "").slice(0, 10) === new Date().toISOString().slice(0, 10);
+      const ref = boughtToday ? p.avg_cost : lp.pc ?? p.price - (p.day_change ?? 0) / p.qty;
+      return { ...p, price, live: true, value: p.qty * price, unrealized: (price - p.avg_cost) * p.qty, unrealized_pct: Number((((price - p.avg_cost) / p.avg_cost) * 100).toFixed(2)), day_change: (price - ref) * p.qty };
+    });
+    const invested = positions.reduce((sum, p) => sum + p.value, 0);
+    const equity = account.cash + invested;
+    return { ...account, positions, invested, equity, total_pnl: equity - account.starting_cash, total_pnl_pct: Number((((equity - account.starting_cash) / account.starting_cash) * 100).toFixed(2)), day_change: positions.reduce((sum, p) => sum + (p.day_change ?? 0), 0) };
+  }, [account, live.prices]);
   const liveAvailable = broker?.trading_enabled && broker.connected;
   const up = (acct?.total_pnl ?? 0) >= 0;
+  const anyLive = acct?.positions.some((p) => p.live);
   const openSearch = () => {
     const t = search.trim().toUpperCase();
     if (/^[A-Z][A-Z0-9.\-]{0,9}$/.test(t)) {
@@ -89,6 +108,7 @@ export default function TradeScreen({ onOpenStock }) {
             <LinearGradient colors={c.dark ? ["#111827", "#1E1B4B"] : ["#EEF2FF", "#F5F3FF"]} style={s.hero}>
               <View style={s.heroTop}>
                 <Pill text="Practice account" color={c.primary} icon="school-outline" />
+                {acct.positions.length > 0 && <LiveBadge status={live.status} live={anyLive} />}
                 <Pill text={acct.market.label} color={acct.market.open ? c.gain : c.muted} icon={acct.market.open ? "radio-button-on" : "moon-outline"} />
               </View>
               <Text style={s.equity}>{usd(acct.equity)}</Text>

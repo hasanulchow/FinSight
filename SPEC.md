@@ -764,3 +764,23 @@ Schema: `supabase/004_options_markets.sql` adds `kv_cache`, a shared cache for o
   - Plans: monthly/yearly toggle, plus "Cancel plan", which opens the cancel flow, or "Resume plan".
   - Email: weekly email toggle and a test send.
 - **Data model.** Migration `007` adds `paper_accounts`, `paper_positions`, `paper_orders`, `live_orders` and `cancel_feedback`. It also adds `user_settings.weekly_email` and `last_weekly_email`, and `subscriptions.interval` and `paused_until`.
+
+## 22. v1.9 Live Market Data
+
+### 22.1 Live chart
+- `mobile/src/components/LiveChart.js` embeds the TradingView Advanced Chart widget by loading its hosted page (`tradingview-widget.com/embed-widget/advanced-chart/`) with the config in the URL hash.
+- Web uses a cross-origin iframe; iOS and Android use `react-native-webview`. No third-party script runs on the app origin.
+- Interval chips: 1m, 5m (default), 15m, 1H, 1D, 1W. The theme follows the app's light or dark mode.
+- The attribution link under the chart is required by TradingView's terms.
+
+### 22.2 Price stream
+- `server/src/lib/stream.js` holds one upstream Finnhub WebSocket. It reconnects with backoff and subscribes only to symbols that clients or internal jobs want, capped by `STREAM_MAX_SYMBOLS` (default 50).
+- The app connects to `/stream` on the API server. Outside local mode it must pass a Supabase access token (`?token=`), or the socket closes with 4401.
+- Client messages: `{type: "subscribe" | "unsubscribe", symbols}`, at most 40 symbols per client. New symbols are seeded with the REST quote (`live: false`, plus previous close `pc`).
+- Server messages: `hello` (`enabled`, `max_symbols`) and `prices` (`{SYM: {p, t, v, live: true}}`), batched every 500 ms for changed symbols. Pings every 30 s.
+- `GET /stream/status` returns upstream state and symbol count. The stream is off when there is no Finnhub key or on Vercel.
+
+### 22.3 Uses
+- App (`mobile/src/lib/live.js`, `useLivePrices`): stock page price and change, Today watchlist rows, Practice account positions and equity (re-priced on every trade), and the order ticket. `LiveBadge` shows Live, Last price or Connecting.
+- Paper engine: fills use `withLivePrice` (a streamed price under 15 s old, else the REST quote). Resting orders are kept warm in the stream and checked every 60 s.
+- Bots: watched bull flags are kept warm in the stream so intraday breakouts trigger on the live price.

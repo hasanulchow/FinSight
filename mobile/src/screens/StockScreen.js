@@ -5,6 +5,9 @@ import { api } from "../lib/api";
 import { makeStyles, useTheme } from "../theme";
 import { BackButton, Banner, Button, Disclaimer, Loading, TickerAvatar } from "../components/ui";
 import TechnicalsCard from "../components/TechnicalsCard";
+import LiveChart from "../components/LiveChart";
+import LiveBadge from "../components/LiveBadge";
+import { useLivePrices } from "../lib/live";
 import EventsCard from "../components/EventsCard";
 import AlertSheet from "../components/AlertSheet";
 import RedFlagsCard from "../components/RedFlagsCard";
@@ -52,7 +55,11 @@ export default function StockScreen({ ticker, onBack, onBrief, onOptions, onBack
   }
 
   const snap = tech?.snapshot;
-  const change = snap?.change_1d_pct;
+  const live = useLivePrices([ticker]);
+  const lp = live.prices[ticker];
+  // Live trade price when streaming; else the last daily close from the chart data
+  const price = lp?.p ?? snap?.price;
+  const change = lp?.p != null && lp.pc ? Number((((lp.p - lp.pc) / lp.pc) * 100).toFixed(2)) : snap?.change_1d_pct;
   const up = (change ?? 0) >= 0;
 
   const tools = [
@@ -72,15 +79,16 @@ export default function StockScreen({ ticker, onBack, onBrief, onOptions, onBack
           <TickerAvatar ticker={ticker} size={54} />
           <View style={{ flex: 1 }}>
             <Text style={s.ticker}>{ticker}</Text>
-            {snap ? (
+            {price != null ? (
               <View style={s.priceRow}>
-                <Text style={s.price}>${snap.price}</Text>
+                <Text style={s.price}>${Number(price).toFixed(2)}</Text>
                 {change != null && (
                   <View style={[s.change, { backgroundColor: c.soft(up ? c.gain : c.loss) }]}>
                     <Ionicons name={up ? "caret-up" : "caret-down"} size={12} color={up ? c.gain : c.loss} />
                     <Text style={[s.changeText, { color: up ? c.gain : c.loss }]}>{Math.abs(change)}%</Text>
                   </View>
                 )}
+                <LiveBadge status={live.status} live={!!lp?.live} />
               </View>
             ) : (
               <Text style={s.muted}>Loading price…</Text>
@@ -109,6 +117,8 @@ export default function StockScreen({ ticker, onBack, onBrief, onOptions, onBack
 
       {!tech && !techError && <Loading text="Loading chart and indicators…" />}
       {techError && <Banner tone="warn">Chart unavailable: {techError}</Banner>}
+      <LiveChart ticker={ticker} />
+
       {tech && <TechnicalsCard snapshot={tech.snapshot} chart={tech.chart} analysis={tech.analysis} onExplain={explain} explaining={explaining} />}
 
       <PatternCard ticker={ticker} />
@@ -132,7 +142,7 @@ const useStyles = makeStyles((c) => ({
   hero: { backgroundColor: c.surface, borderRadius: 24, borderWidth: 1, borderColor: c.border, padding: 20, marginTop: 8 },
   heroTop: { flexDirection: "row", alignItems: "center", gap: 14 },
   ticker: { fontSize: 15, fontWeight: "700", color: c.textSecondary, letterSpacing: 0.4 },
-  priceRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 2 },
+  priceRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 2, flexWrap: "wrap" },
   price: { fontSize: 32, fontWeight: "800", color: c.text, letterSpacing: -1, fontVariant: ["tabular-nums"] },
   change: { flexDirection: "row", alignItems: "center", gap: 3, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 },
   changeText: { fontWeight: "800", fontVariant: ["tabular-nums"] },

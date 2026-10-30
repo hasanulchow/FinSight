@@ -20,6 +20,8 @@ import { registerGrowthRoutes } from "./routes/growth.js";
 import { registerTradeRoutes } from "./routes/trade.js";
 import { registerBotRoutes } from "./routes/bots.js";
 import { rateLimit } from "./lib/rateLimit.js";
+import { attachStream, streamStatus } from "./lib/stream.js";
+import { runPaperOrders } from "./lib/paper.js";
 import { checkQuota, recordUsage } from "./lib/plans.js";
 import { startScheduler } from "./lib/jobs.js";
 
@@ -33,6 +35,7 @@ app.use(rateLimit());
 app.use(express.json({ limit: "1mb", verify: (req, _res, buf) => { req.rawBody = buf; } }));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
+app.get("/stream/status", (_req, res) => res.json(streamStatus()));
 
 // Local dev: serves the Expo web build (mobile/dist) when it exists. On Vercel the CDN serves it.
 const webDist = fileURLToPath(new URL("../../mobile/dist", import.meta.url));
@@ -320,7 +323,7 @@ app.use((err, req, res, _next) => {
 
 // Vercel imports the app as a function (api/index.js); everywhere else, run a normal server.
 if (!process.env.VERCEL) {
-  app.listen(config.port, () => {
+  const server = app.listen(config.port, () => {
     console.log(`FinSight API listening on :${config.port}`);
     startScheduler();
     if (!config.pricesKey) console.warn("Technical analysis, screener technicals and indicator alerts are off until MASSIVE_API_KEY is set.");
@@ -331,6 +334,10 @@ if (!process.env.VERCEL) {
     const missing = missingResearchKeys();
     if (missing.length) console.warn(`Agents disabled until these are set: ${missing.join(", ")}`);
   });
+  // Live prices over WebSocket at /stream (needs a long-running host such as Render)
+  attachStream(server);
+  // With live prices available, check resting practice orders every minute (the job also runs them)
+  setInterval(() => runPaperOrders().catch(() => {}), 60_000).unref();
 }
 
 export default app;
