@@ -98,9 +98,10 @@ export default function OrderSheet({ visible, onClose, ticker: presetTicker, sid
   const est = live ? (preview?.preview?.price ?? (Number(price) || null)) : preview?.est_price;
   const account = accounts.find((a) => a.id === accountId);
   const sideColor = side === "buy" ? c.gain : c.loss;
+  const sideLabel = side === "buy" ? "Buy" : side === "short" ? "Short" : "Sell";
 
   return (
-    <Sheet visible={visible} onClose={onClose} eyebrow={live ? "Real order · your broker" : "Paper trading · practice money"} title={placed ? "Order sent" : `${side === "buy" ? "Buy" : "Sell"} ${ticker.trim().toUpperCase() || "stock"}`}>
+    <Sheet visible={visible} onClose={onClose} eyebrow={live ? "Real order · your broker" : "Paper trading · practice money"} title={placed ? "Order sent" : `${sideLabel} ${ticker.trim().toUpperCase() || "stock"}`}>
       {placed ? (
         <View style={s.done}>
           <Ionicons name="checkmark-circle" size={44} color={c.gain} />
@@ -118,7 +119,7 @@ export default function OrderSheet({ visible, onClose, ticker: presetTicker, sid
               ? `Status: ${placed.result?.status ?? "submitted"}. Check your broker for the fill.`
               : placed.status === "open"
                 ? "It fills when the price reaches your level (or at the next open for market orders). You'll get a notification."
-                : `${side === "buy" ? "Bought" : "Sold"} ${placed.qty} ${placed.ticker}. Closed trades are added to your journal.`}
+                : `${side === "buy" ? "Bought" : side === "short" ? "Shorted" : "Sold"} ${placed.qty} ${placed.ticker}. Closed trades are added to your journal.`}
           </Text>
           <Button title="Done" onPress={onClose} size="lg" style={{ marginTop: 18, alignSelf: "stretch" }} />
         </View>
@@ -134,7 +135,8 @@ export default function OrderSheet({ visible, onClose, ticker: presetTicker, sid
               </View>
             </>
           )}
-          <Segmented options={[["buy", "Buy"], ["sell", "Sell"]]} value={side} onChange={edit(setSide)} />
+          <Segmented options={live ? [["buy", "Buy"], ["sell", "Sell"]] : [["buy", "Buy"], ["sell", "Sell"], ["short", "Short"]]} value={side} onChange={edit(setSide)} />
+          {side === "short" && <Text style={s.hint}>Selling short profits if the price falls and loses if it rises, with no limit on the loss. A short holds 50% margin; buy the shares back to cover it.</Text>}
           <View style={s.row}>
             <View style={{ flex: 1.2 }}>
               <Text style={s.label}>Ticker</Text>
@@ -158,7 +160,7 @@ export default function OrderSheet({ visible, onClose, ticker: presetTicker, sid
           {type !== "market" && (
             <View style={{ marginTop: 10 }}>
               <Input value={price} onChangeText={edit(setPrice)} keyboardType="decimal-pad" placeholder={type === "limit" ? "Limit price" : "Stop price"} />
-              <Text style={s.hint}>{type === "limit" ? `Fills at $${price || "…"} or better.` : `Becomes a market order when the price ${side === "sell" ? "falls to" : "rises to"} $${price || "…"}.`}</Text>
+              <Text style={s.hint}>{type === "limit" ? `Fills at $${price || "…"} or better.` : `Becomes a market order when the price ${side === "buy" ? "rises to" : "falls to"} $${price || "…"}.`}</Text>
             </View>
           )}
           <View style={s.tifRow}>
@@ -170,7 +172,7 @@ export default function OrderSheet({ visible, onClose, ticker: presetTicker, sid
           {preview && (
             <View style={s.review}>
               <Row label={live ? "Estimated price" : "Estimated price"} value={est != null ? `$${Number(est).toFixed(2)}` : "Market"} />
-              <Row label={side === "buy" ? "Estimated cost" : "Estimated proceeds"} value={est != null ? usd(est * Number(qty)) : "–"} strong />
+              <Row label={side === "buy" ? "Estimated cost" : side === "short" ? "Estimated short value" : "Estimated proceeds"} value={est != null ? usd(est * Number(qty)) : "–"} strong />
               {!live && <Row label="Buying power after" value={usd(preview.buying_power_after)} />}
               {live && preview.preview?.estimated_commission != null && <Row label="Commission" value={usd(preview.preview.estimated_commission)} />}
               {live && preview.preview?.remaining_cash != null && <Row label="Cash after" value={usd(preview.preview.remaining_cash)} />}
@@ -206,7 +208,7 @@ export default function OrderSheet({ visible, onClose, ticker: presetTicker, sid
               style={({ pressed }) => [s.place, { backgroundColor: sideColor }, (busy || blocked || (live && !ack)) && { opacity: 0.45 }, pressed && { opacity: 0.85 }]}
               accessibilityRole="button"
             >
-              <Text style={s.placeText}>{busy ? "Placing…" : `${live ? "Place real" : "Place paper"} ${side} order`}</Text>
+              <Text style={s.placeText}>{busy ? "Placing…" : `${live ? "Place real" : "Place paper"} ${side === "short" ? "short" : side} order`}</Text>
             </Pressable>
           )}
           <Text style={[s.hint, { textAlign: "center", marginTop: 10 }]}>

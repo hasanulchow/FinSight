@@ -1,4 +1,4 @@
-import { sma, atr } from "./indicators.js";
+import { sma } from "./indicators.js";
 
 // Chart pattern detection on daily bars ({ t, o, h, l, c, v }, oldest first). Pure functions, unit tested.
 //
@@ -126,6 +126,60 @@ export function detectBullFlag(bars, { end = bars.length - 1, ...opts } = {}) {
   return null;
 }
 
+// ---------- Bear flag ----------
+// The mirror image: a sharp drop (the pole) and a short, weak bounce (the flag). The entry is a break
+// below the flag's low, the stop goes above the flag's high, and the target subtracts the pole's height.
+// Detected by running the bull flag logic on inverted prices (1/p): a drop becomes a rally of about the
+// same size, and highs and lows swap.
+
+export const BEAR_FLAG_DEFAULTS = { ...BULL_FLAG_DEFAULTS, min_drop_pct: 8 };
+const inverted = new WeakMap();
+function invert(bars) {
+  let r = inverted.get(bars);
+  if (r?.length !== bars.length || r[r.length - 1]?.t !== bars[bars.length - 1]?.t) {
+    r = bars.map((b) => ({ t: b.t, o: 1 / b.o, h: 1 / b.l, l: 1 / b.h, c: 1 / b.c, v: b.v }));
+    inverted.set(bars, r);
+  }
+  return r;
+}
+
+/** The best valid bear flag that ends exactly at bar `end`, in real prices, or null. */
+export function bearFlagEndingAt(bars, end, opts = {}) {
+  const { min_drop_pct = BEAR_FLAG_DEFAULTS.min_drop_pct, ...rest } = opts;
+  const f = flagEndingAt(invert(bars), end, { ...rest, min_pole_pct: (1 / (1 - min_drop_pct / 100) - 1) * 100 });
+  if (!f) return null;
+  const poleHigh = 1 / f.poleBottom, poleLow = 1 / f.poleTop;
+  return { ...f, poleHigh, poleLow, flagHigh: 1 / f.flagLow, flagLow: 1 / f.flagHigh, poleDrop: ((poleHigh - poleLow) / poleHigh) * 100 };
+}
+
+function describeBear(bars, f, extra) {
+  return {
+    pattern: "bear_flag",
+    pole: { start: day(bars[f.poleStart].t), end: day(bars[f.poleEnd].t), high: round(f.poleHigh), low: round(f.poleLow), drop_pct: round(f.poleDrop, 1) },
+    flag: { start: day(bars[f.flagStart].t), end: day(bars[f.flagEnd].t), bars: f.flagEnd - f.flagStart + 1, high: round(f.flagHigh), low: round(f.flagLow), retrace_pct: round(f.retrace, 1), volume_vs_pole: round(f.volRatio, 2) },
+    breakdown_level: round(f.flagLow),
+    stop_level: round(f.flagHigh),
+    target_measured_move: round(f.flagLow - (f.poleHigh - f.poleLow)),
+    quality: f.volRatio < 1 && f.retrace <= 38.2 ? "high" : f.retrace <= 50 ? "medium" : "low",
+    ...extra,
+  };
+}
+
+/** Bear flag status at bar `end`: "breakdown" (closed below the flag low) or "forming". Null when there's no setup. */
+export function detectBearFlag(bars, { end = bars.length - 1, ...opts } = {}) {
+  const o = { ...BEAR_FLAG_DEFAULTS, ...opts };
+  if (end < 30) return null;
+  const prev = bearFlagEndingAt(bars, end - 1, o);
+  if (prev && bars[end].c < prev.flagLow) {
+    const vol20 = avgVol(bars, Math.max(0, end - 20), end - 1);
+    const volMult = (bars[end].v ?? 0) / (vol20 || 1);
+    return describeBear(bars, prev, { status: "breakdown", breakdown_date: day(bars[end].t), breakdown_close: round(bars[end].c), breakdown_volume_mult: round(volMult, 2), volume_confirmed: volMult >= o.volume_mult });
+  }
+  const now = bearFlagEndingAt(bars, end, o);
+  if (now) return describeBear(bars, now, { status: "forming", last_close: round(bars[end].c), distance_to_breakdown_pct: round(((bars[end].c - now.flagLow) / bars[end].c) * 100, 2) });
+  return null;
+}
+
 /**
  * Market regime from SPY bars at index `end`:
  * "bull" = above a rising 50-day that is above the 200-day; "bear" = below the 200-day; else "neutral".
@@ -142,20 +196,11 @@ export function marketRegime(spyBars, { end = spyBars.length - 1, sma50, sma200 
   return { state, close: round(c), sma50: round(a), sma200: round(b), reasons };
 }
 
-export const regimePasses = (filter, state) => filter === "off" || (filter === "bull" ? state === "bull" : filter === "not_bear" ? state !== "bear" : true);
-
-/** Stop price for an entry, from the pattern or ATR. */
-export function stopFor(setup, bars, { stop = "flag_low", atr_mult = 2 } = {}, end = bars.length - 1) {
-  if (stop === "atr") {
-    const a = atr(bars, 14)[end];
-    return a ? round(setup.breakout_level - atr_mult * a) : setup.stop_level;
-  }
-  return round(setup.stop_level * 0.998); // just under the flag low
-}
-
-/** Target price: measured move, or a multiple of the risk. */
-export function targetFor(setup, entry, stopPrice, { target = "measured_move" } = {}) {
-  if (target === "r2") return round(entry + 2 * (entry - stopPrice));
-  if (target === "r3") return round(entry + 3 * (entry - stopPrice));
-  return setup.target_measured_move;
-}
+/** Market filters: long strategies use "bull" or "not_bear", short strategies "bear" or "not_bull". */
+export const regimePasses = (filter, state) => {
+  if (filter === "bull") return state === "bull";
+  if (filter === "not_bear") return state !== "bear";
+  if (filter === "bear") return state === "bear";
+  if (filter === "not_bull") return state !== "bull";
+  return true;
+};

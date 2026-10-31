@@ -1,7 +1,8 @@
 import { requireUser } from "../lib/auth.js";
 import { db } from "../lib/db.js";
 import { getDailyBars, pricesEnabled } from "../tools/prices.js";
-import { detectBullFlag, marketRegime } from "../lib/patterns.js";
+import { detectBullFlag, detectBearFlag, marketRegime } from "../lib/patterns.js";
+import { STRATEGIES, currentSetup } from "../lib/strategies.js";
 import { BOT_TEMPLATES, listBots, createBot, updateBot, deleteBot, listSignals, runBot, backtestBot, cleanConfig } from "../lib/bots.js";
 import { reportError } from "../lib/monitoring.js";
 
@@ -49,9 +50,17 @@ export function registerBotRoutes(app) {
   app.get("/stocks/:ticker/patterns", requireUser, handle(async (req, res) => {
     const t = String(req.params.ticker).toUpperCase();
     if (!TICKER_RE.test(t)) return res.status(400).json({ error: "Invalid ticker" });
-    if (!pricesEnabled()) return res.json({ ticker: t, bull_flag: null, note: "Price history isn't set up on this server." });
+    if (!pricesEnabled()) return res.json({ ticker: t, bull_flag: null, bear_flag: null, setups: [], note: "Price history isn't set up on this server." });
     const bars = await getDailyBars(t);
-    res.json({ ticker: t, bull_flag: detectBullFlag(bars), as_of: new Date(bars[bars.length - 1].t).toISOString().slice(0, 10) });
+    // Every bot strategy's setup on this chart (other than the flags, which have their own detail)
+    const setups = Object.entries(STRATEGIES)
+      .filter(([key]) => !key.includes("flag"))
+      .map(([key, st]) => {
+        const s = currentSetup(st, bars, st.config.pattern_params);
+        return s && { strategy: key, name: st.name, direction: st.direction, status: s.status, level: Number(s.level.toFixed(2)), summary: s.summary, level_name: st.level_name };
+      })
+      .filter(Boolean);
+    res.json({ ticker: t, bull_flag: detectBullFlag(bars), bear_flag: detectBearFlag(bars), setups, as_of: new Date(bars[bars.length - 1].t).toISOString().slice(0, 10) });
   }));
   app.get("/market/regime", requireUser, handle(async (_req, res) => {
     if (!pricesEnabled()) return res.json({ state: "unknown", reasons: ["Price history isn't set up on this server."] });

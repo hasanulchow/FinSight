@@ -78,7 +78,7 @@ export default function TradeScreen({ onOpenStock }) {
       const price = lp.p;
       const boughtToday = String(p.opened_at ?? "").slice(0, 10) === new Date().toISOString().slice(0, 10);
       const ref = boughtToday ? p.avg_cost : lp.pc ?? p.price - (p.day_change ?? 0) / p.qty;
-      return { ...p, price, live: true, value: p.qty * price, unrealized: (price - p.avg_cost) * p.qty, unrealized_pct: Number((((price - p.avg_cost) / p.avg_cost) * 100).toFixed(2)), day_change: (price - ref) * p.qty };
+      return { ...p, price, live: true, value: p.qty * price, unrealized: (price - p.avg_cost) * p.qty, unrealized_pct: Number((((price - p.avg_cost) / p.avg_cost) * 100 * (p.qty < 0 ? -1 : 1)).toFixed(2)), day_change: (price - ref) * p.qty };
     });
     const invested = positions.reduce((sum, p) => sum + p.value, 0);
     const equity = account.cash + invested;
@@ -141,13 +141,13 @@ export default function TradeScreen({ onOpenStock }) {
                   <TickerAvatar ticker={p.ticker} size={40} />
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={s.posTicker}>{p.ticker}</Text>
-                    <Text style={s.muted} numberOfLines={1}>{p.qty} sh · avg ${p.avg_cost.toFixed(2)}</Text>
+                    <Text style={s.muted} numberOfLines={1}>{p.qty < 0 ? `Short ${-p.qty}` : p.qty} sh · avg ${p.avg_cost.toFixed(2)}</Text>
                   </View>
                   <View style={{ alignItems: "flex-end" }}>
-                    <Text style={s.posValue}>{usd(p.value)}</Text>
+                    <Text style={s.posValue}>{p.qty < 0 ? `−${usd(-p.value)}` : usd(p.value)}</Text>
                     <Text style={[s.muted, { color: p.unrealized >= 0 ? c.gain : c.loss }]}>{signed(p.unrealized)} ({p.unrealized_pct}%)</Text>
                   </View>
-                  <Button title="Sell" size="sm" variant="ghost" onPress={() => setTicket({ ticker: p.ticker, side: "sell" })} />
+                  <Button title={p.qty < 0 ? "Cover" : "Sell"} size="sm" variant="ghost" onPress={() => setTicket({ ticker: p.ticker, side: p.qty < 0 ? "buy" : "sell" })} />
                 </Pressable>
               ))}
             </SectionCard>
@@ -158,7 +158,7 @@ export default function TradeScreen({ onOpenStock }) {
               {acct.open_orders.map((o) => (
                 <View key={o.id} style={s.orderRow}>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.orderTitle}>{o.side === "buy" ? "Buy" : "Sell"} {o.qty} {o.ticker}</Text>
+                    <Text style={s.orderTitle}>{o.side === "buy" ? "Buy" : o.side === "short" ? "Short" : "Sell"} {o.qty} {o.ticker}</Text>
                     <Text style={s.muted}>{o.type === "market" ? "Market · fills at the open" : `${o.type} at $${o.limit_price ?? o.stop_price}`} · {o.time_in_force === "day" ? "today" : "until cancelled"}</Text>
                   </View>
                   <Button title="Cancel" size="sm" variant="danger" onPress={() => cancel(o.id)} />

@@ -784,3 +784,24 @@ Schema: `supabase/004_options_markets.sql` adds `kv_cache`, a shared cache for o
 - App (`mobile/src/lib/live.js`, `useLivePrices`): stock page price and change, Today watchlist rows, Practice account positions and equity (re-priced on every trade), and the order ticket. `LiveBadge` shows Live, Last price or Connecting.
 - Paper engine: fills use `withLivePrice` (a streamed price under 15 s old, else the REST quote). Resting orders are kept warm in the stream and checked every 60 s.
 - Bots: watched bull flags are kept warm in the stream so intraday breakouts trigger on the live price.
+
+## 23. v2.0 Bot Strategies and Short Selling
+
+### 23.1 Strategy engine
+- `server/src/lib/strategies.js` holds the strategies. Each has `direction` (long or short), `entry` ("stop" for a level to break, "close" for a close signal), option schemas, defaults, and `setup(bars, end, params, ind)`, which returns `{ anchor, level, stop, target, exit_rule?, summary, info }` or null.
+- `currentSetup` gives the live status: "triggered" (the last close broke the prior bar's level, or a close signal fired) or "forming" (a level to watch today).
+- `simulate` replays one strategy on one ticker: entry at the level (or the open on gaps) for intraday triggers, the next open for close triggers; the stop is checked before the target within a bar; exit rules and the time stop come after. Results are in R.
+- Indicators are computed once per bars array and cached, and the cache is rebuilt if bars are appended.
+- Strategies: `bull_flag_breakout`, `bear_flag_breakdown` (the bull flag logic run on inverted prices, 1/p), `high_breakout`, `trend_pullback`, `rsi2_reversion` (exit rule: close above the 5-day average), `squeeze_breakout` (Bollinger bandwidth at its lowest in N days).
+
+### 23.2 Bots
+- `config.strategy` selects the strategy. `cleanConfig` validates options against that strategy's schema and market filters. Older bull flag bots (no `strategy`, `flag_low`, `measured_move`) map to `bull_flag_breakout`, `pattern`, `pattern`.
+- `GET /bots/templates` returns each strategy's name, description, side, entry type, level name, stop label, targets, filters, option chips and default config, and the app builds the editor from it.
+- Short bots enter with a paper `short` order, protect with a buy stop above, and cover at the target or time stop. Position sizing uses `stop − entry` as the risk per share and 50% margin for the buying power cap.
+- Signals keep the `flag_start` column as the setup's anchor date.
+- `GET /stocks/:ticker/patterns` adds `bear_flag` and `setups` (each other strategy's current setup).
+
+### 23.3 Practice account shorts
+- Order side `short`; `applyFill` keeps short positions as negative quantities with a weighted average cost. A buy on a short covers it (no flipping in one order). Selling a short or shorting a long is refused.
+- Buying power = cash − open buy reservations (not covers) − 50% of open short orders − 150% of short market value.
+- Migration `009` changes `paper_positions.qty` to `<> 0` and adds `short` to `paper_orders.side`.

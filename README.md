@@ -193,6 +193,37 @@ Every bot has a backtest over about 2 years of daily bars, with results in R. Th
 
 That result is why SPY above its 200-day is the default. It's a small sample, and past results don't predict future returns.
 
+### More bot strategies and short selling (v2.0)
+
+Six strategies now, all on the same engine (`lib/strategies.js`). Each strategy defines its setup, and the engine handles live scanning, the market filter, entries, exits, sizing and backtests:
+
+| Strategy | Side | Setup | Entry | Default exit |
+|---|---|---|---|---|
+| Bull flag breakout | Long | Sharp rally, then a tight pullback | Break above the flag high | Stop under the flag, measured move |
+| **Bear flag breakdown** | **Short** | Sharp drop, then a weak bounce | Break below the flag low | Stop above the flag, 2R |
+| New high breakout | Long | Uptrend, near the 20-day (or 55-day) high | Break above the high | 2× ATR stop, 3R, 20-day time stop |
+| Pullback in an uptrend | Long | 50-day above the 200-day, dip to the 20-day average | Break above the prior day's high | 2× ATR stop, 2R |
+| Oversold bounce | Long | Above the 200-day, 2-day RSI under 10 | Next open after the signal | Close above the 5-day average, 2.5× ATR stop |
+| Volatility squeeze breakout | Long | Narrowest Bollinger Bands in 6 months, tight range above the 50-day | Break above the range | Stop under the range, 2× the range |
+
+- **Short selling in the practice account.** Side `short` sells shares you don't own (a negative position), and a buy on a short position covers it. A short holds 150% of its value against buying power (the proceeds plus 50% margin). Covers go to the journal as short trades. The order ticket has a Short option in practice mode only; real orders stay buy and sell.
+- **Short market filters:** SPY below its 200-day, or "not a strong uptrend".
+- The **stock page card** now shows a bear flag when there's no bull flag, plus every other strategy's setup on that chart.
+- Migration `009` allows negative practice positions and the `short` order side.
+
+**Backtest** (same 12 large caps, about 2 years, default settings):
+
+| Strategy | Trades | Win rate | Avg per trade | Profit factor |
+|---|---|---|---|---|
+| Oversold bounce | 123 | 75% | +0.14R | 2.16 |
+| Bull flag breakout | 86 | 42% | +0.15R | 1.27 |
+| New high breakout | 64 | 47% | +0.10R | 1.28 |
+| Pullback in an uptrend | 75 | 51% | +0.10R | 1.25 |
+| Volatility squeeze breakout | 29 | 48% | +0.08R | 1.16 |
+| Bear flag breakdown | 22 | 41% | +0.05R | 1.11 |
+
+The test period was mostly a rising market, which is hard for shorts, and SPY was almost never below its 200-day, so the bear flag defaults to "not a strong uptrend". The pullback strategy lost money with a stop under the 3-day low (−0.13R a trade), so it uses a 2× ATR stop and a 2R target. These are small samples with no fees, slippage or borrow costs, and past results don't predict future returns.
+
 ### Live market data (v1.9)
 
 - **Live chart.** The stock page embeds TradingView's free Advanced Chart widget (`components/LiveChart.js`): 1m to 1W candles that update in real time, plus drawing tools and indicators. The app loads TradingView's hosted widget page in a cross-origin iframe (web) or a WebView (iOS/Android), so their code never runs on this app's origin or sees the session. TradingView's terms require the attribution link under the chart; keep it.
@@ -216,7 +247,7 @@ That result is why SPY above its 200-day is the default. It's a small sample, an
 
 ### 1. Supabase
 1. Create a project at supabase.com.
-2. In the SQL editor, run `supabase/schema.sql`, then `supabase/002_memory_guardrails_embeddings.sql` (pgvector, memory, chat, guardrail log), then `supabase/003_trading_features.sql` (price cache, alerts, notifications, push tokens, screener, earnings cache, holdings), then `supabase/004_options_markets.sql` (shared cache for options and market data), then `supabase/005_copilot_journal_billing.sql` (journal, Copilot, plans, usage and subscriptions), then `supabase/006_proactive_growth.sql` (settings and onboarding, watchlist and theses, morning briefs, automations, broker connections, AI cost log, share links), then `supabase/007_trading_email_billing.sql` (paper trading, live orders, weekly email, annual plan and cancel feedback), then `supabase/008_trading_bots.sql` (trading bots and their signals).
+2. In the SQL editor, run `supabase/schema.sql`, then `supabase/002_memory_guardrails_embeddings.sql` (pgvector, memory, chat, guardrail log), then `supabase/003_trading_features.sql` (price cache, alerts, notifications, push tokens, screener, earnings cache, holdings), then `supabase/004_options_markets.sql` (shared cache for options and market data), then `supabase/005_copilot_journal_billing.sql` (journal, Copilot, plans, usage and subscriptions), then `supabase/006_proactive_growth.sql` (settings and onboarding, watchlist and theses, morning briefs, automations, broker connections, AI cost log, share links), then `supabase/007_trading_email_billing.sql` (paper trading, live orders, weekly email, annual plan and cancel feedback), then `supabase/008_trading_bots.sql` (trading bots and their signals), then `supabase/009_strategies_shorts.sql` (short selling in the practice account).
 3. Authentication → Providers → Email: enabled. For a quick demo, turn off "Confirm email".
 4. Authentication → URL Configuration: set Site URL to your deployed URL (e.g. `https://finsight.onrender.com`) and add it plus `http://localhost:3001` under Redirect URLs, so confirmation emails link back to the app.
 5. Project Settings → API: copy the URL, the anon key and the service-role key.

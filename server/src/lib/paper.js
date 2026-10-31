@@ -9,11 +9,15 @@ import { track } from "./analytics.js";
 
 // Paper trading: a practice brokerage account with fake money and live prices.
 // Market orders fill at the last price during market hours (queued until the open otherwise);
-// limit and stop orders rest until the price crosses them. Long positions only.
+// limit and stop orders rest until the price crosses them. Shorting is supported: side "short" sells
+// shares you don't own (a negative position), and a buy on a short position covers it. Shorts hold
+// 150% of their value against buying power (the sale proceeds plus 50% margin, like Reg T).
 // Closed trades are written to the journal (setup "paper") so the coach and stats include them.
 
 export const STARTING_CASH = Number(process.env.PAPER_STARTING_CASH || 100_000);
 const TYPES = ["market", "limit", "stop"];
+const SIDES = ["buy", "sell", "short"];
+const SHORT_MARGIN = 0.5; // extra buying power a short holds on top of its proceeds
 const SYM = /^[A-Z][A-Z0-9.\-]{0,9}$/;
 const bad = (msg, status = 400) => Object.assign(new Error(msg), { status });
 const round = (x, d = 2) => Number(Number(x).toFixed(d));
@@ -37,13 +41,27 @@ export function shouldFill(order, price, { open }) {
   return null;
 }
 
-/** Applies a fill to a position (weighted average cost). Returns the new position and realized P/L for sells. */
+/**
+ * Applies a fill to a position (weighted average cost; negative qty = short). Returns the new position
+ * and realized P/L for sells and covers.
+ */
 export function applyFill(position, { side, qty, price }) {
   const pos = position ?? { qty: 0, avg_cost: 0 };
+  if (side === "short") {
+    if (pos.qty > 1e-9) throw bad(`Sell your ${pos.qty} shares before shorting`);
+    const qtyNew = pos.qty - qty;
+    return { position: { ...pos, qty: round(qtyNew, 6), avg_cost: round((-pos.qty * pos.avg_cost + qty * price) / -qtyNew, 6) }, realized: 0 };
+  }
+  if (side === "buy" && pos.qty < -1e-9) {
+    // Buy to cover a short
+    if (qty > -pos.qty + 1e-9) throw bad(`You're short ${-pos.qty} shares: buy up to that many to cover`);
+    return { position: { ...pos, qty: round(pos.qty + qty, 6) }, realized: round((pos.avg_cost - price) * qty) };
+  }
   if (side === "buy") {
     const qtyNew = pos.qty + qty;
     return { position: { ...pos, qty: round(qtyNew, 6), avg_cost: round((pos.qty * pos.avg_cost + qty * price) / qtyNew, 6) }, realized: 0 };
   }
+  if (pos.qty < -1e-9) throw bad("You're short this stock: buy to cover it");
   if (qty > pos.qty + 1e-9) throw bad(`You only have ${pos.qty} shares to sell`);
   return { position: { ...pos, qty: round(pos.qty - qty, 6) }, realized: round((price - pos.avg_cost) * qty) };
 }
@@ -69,7 +87,7 @@ const listOrders = (userId, limit = 100) => db.list("paper_orders", { user_id: u
 
 async function upsertPosition(userId, ticker, pos) {
   const existing = (await listPositions(userId)).find((p) => p.ticker === ticker);
-  if (pos.qty <= 1e-9) {
+  if (Math.abs(pos.qty) <= 1e-9) {
     if (existing) await db.remove("paper_positions", existing.id, userId);
     return null;
   }
@@ -87,19 +105,24 @@ export async function getPaperAccount(userId) {
       const q = await withLivePrice(p.ticker).catch(() => null);
       const price = q?.price ?? p.avg_cost;
       const qty = Number(p.qty), cost = Number(p.avg_cost);
+      const dir = qty < 0 ? -1 : 1;
       // Bought today: today's change is the move since the fill, not the stock's whole-day move
       const boughtToday = String(p.opened_at ?? "").slice(0, 10) === new Date().toISOString().slice(0, 10);
-      return { ticker: p.ticker, name: q?.name ?? p.ticker, qty, avg_cost: round(cost, 4), price, value: round(qty * price), unrealized: round((price - cost) * qty), unrealized_pct: round(((price - cost) / cost) * 100), day_change: boughtToday ? round((price - cost) * qty) : q ? round((q.change ?? 0) * qty) : 0, day_change_pct: q?.changePercent != null ? round(q.changePercent) : null, opened_at: p.opened_at };
+      return { ticker: p.ticker, name: q?.name ?? p.ticker, side: dir < 0 ? "short" : "long", qty, avg_cost: round(cost, 4), price, value: round(qty * price), unrealized: round((price - cost) * qty), unrealized_pct: round(((price - cost) / cost) * 100 * dir), day_change: boughtToday ? round((price - cost) * qty) : q ? round((q.change ?? 0) * qty) : 0, day_change_pct: q?.changePercent != null ? round(q.changePercent) : null, opened_at: p.opened_at };
     })
   );
   const open = orders.filter((o) => o.status === "open");
-  const reserved = open.filter((o) => o.side === "buy").reduce((s, o) => s + Number(o.qty) * Number(o.limit_price ?? o.stop_price ?? o.est_price ?? 0), 0);
+  // Open buys reserve their cost (except covers, which the short's margin already holds); open shorts reserve their margin
+  const shortTickers = new Set(priced.filter((p) => p.qty < 0).map((p) => p.ticker));
+  const orderValue = (o) => Number(o.qty) * Number(o.limit_price ?? o.stop_price ?? o.est_price ?? 0);
+  const reserved = open.reduce((s, o) => s + (o.side === "buy" && !shortTickers.has(o.ticker) ? orderValue(o) : o.side === "short" ? orderValue(o) * SHORT_MARGIN : 0), 0);
+  const shortValue = priced.reduce((s, p) => s + (p.qty < 0 ? -p.value : 0), 0);
   const invested = priced.reduce((s, p) => s + p.value, 0);
   const cash = Number(account.cash);
   const equity = cash + invested;
   return {
     cash: round(cash),
-    buying_power: round(Math.max(0, cash - reserved)),
+    buying_power: round(Math.max(0, cash - reserved - shortValue * (1 + SHORT_MARGIN))),
     invested: round(invested),
     equity: round(equity),
     starting_cash: Number(account.starting_cash),
@@ -119,7 +142,7 @@ export async function getPaperAccount(userId) {
 function cleanOrder(input) {
   const ticker = String(input.ticker ?? "").trim().toUpperCase();
   if (!SYM.test(ticker)) throw bad("Enter a valid ticker");
-  const side = input.side === "sell" ? "sell" : "buy";
+  const side = SIDES.includes(input.side) ? input.side : "buy";
   const type = TYPES.includes(input.type) ? input.type : "market";
   const qty = Number(input.qty);
   if (!(qty > 0) || qty > 1e6) throw bad("Enter a quantity greater than 0");
@@ -138,8 +161,14 @@ export async function previewPaperOrder(userId, input) {
   const held = acct.positions.find((p) => p.ticker === o.ticker)?.qty ?? 0;
   const pendingSells = acct.open_orders.filter((x) => x.ticker === o.ticker && x.side === "sell").reduce((s, x) => s + Number(x.qty), 0);
   const problems = [];
-  if (o.side === "buy" && cost > acct.buying_power) problems.push(`Not enough buying power: this needs about $${cost.toFixed(2)}, you have $${acct.buying_power.toFixed(2)}.`);
-  if (o.side === "sell" && o.qty > held - pendingSells + 1e-9) problems.push(`You can sell up to ${Math.max(0, held - pendingSells)} shares of ${o.ticker}.`);
+  const covering = o.side === "buy" && held < 0;
+  const pendingCovers = acct.open_orders.filter((x) => x.ticker === o.ticker && x.side === "buy").reduce((s, x) => s + Number(x.qty), 0);
+  if (o.side === "buy" && !covering && cost > acct.buying_power) problems.push(`Not enough buying power: this needs about ${cost.toFixed(2)}, you have ${acct.buying_power.toFixed(2)}.`);
+  if (covering && o.qty > -held - pendingCovers + 1e-9) problems.push(`You're short ${-held} shares of ${o.ticker}: buy up to ${Math.max(0, -held - pendingCovers)} to cover.`);
+  if (o.side === "sell" && held < 0) problems.push(`You're short ${o.ticker}: buy to cover it instead.`);
+  else if (o.side === "sell" && o.qty > held - pendingSells + 1e-9) problems.push(`You can sell up to ${Math.max(0, held - pendingSells)} shares of ${o.ticker}.`);
+  if (o.side === "short" && held > 0) problems.push(`Sell your ${held} shares of ${o.ticker} before shorting it.`);
+  if (o.side === "short" && cost * SHORT_MARGIN > acct.buying_power) problems.push(`Not enough buying power: a short holds 50% margin (about ${(cost * SHORT_MARGIN).toFixed(2)}), you have ${acct.buying_power.toFixed(2)}.`);
   if (o.type === "market" && !acct.market.open) problems.push(`${acct.market.label}: a market order will fill at the next open, at whatever the price is then.`);
   return {
     order: o,
@@ -147,7 +176,7 @@ export async function previewPaperOrder(userId, input) {
     est_price: round(estPrice),
     est_cost: round(cost),
     buying_power: acct.buying_power,
-    buying_power_after: o.side === "buy" ? round(acct.buying_power - cost) : round(acct.buying_power + cost),
+    buying_power_after: round(acct.buying_power + (o.side === "short" ? -cost * SHORT_MARGIN : covering ? cost * SHORT_MARGIN : o.side === "buy" ? -cost : cost)),
     position_qty: held,
     market: acct.market,
     blocking: problems.filter((p) => !p.includes("next open")),
@@ -183,7 +212,7 @@ async function tryFill(userId, order, price, market) {
   const current = positions.find((p) => p.ticker === order.ticker);
   const qty = Number(order.qty);
   const cost = fillPrice * qty;
-  if (order.side === "buy" && cost > Number(account.cash) + 1e-6) {
+  if (order.side === "buy" && !(Number(current?.qty) < 0) && cost > Number(account.cash) + 1e-6) {
     return db.update("paper_orders", order.id, userId, { status: "rejected", reason: "Not enough cash when the order triggered", closed_at: new Date().toISOString() });
   }
   let result;
@@ -199,9 +228,10 @@ async function tryFill(userId, order, price, market) {
     realized_pnl: round(Number(account.realized_pnl ?? 0) + result.realized, 4),
   });
   const filled = await db.update("paper_orders", order.id, userId, { status: "filled", filled_price: round(fillPrice, 4), filled_at: now, closed_at: now });
-  if (order.side === "sell" && current) {
+  const closing = current && ((order.side === "sell" && Number(current.qty) > 0) || (order.side === "buy" && Number(current.qty) < 0));
+  if (closing) {
     await addTrade(userId, {
-      ticker: order.ticker, side: "long", instrument: "stock", quantity: qty,
+      ticker: order.ticker, side: order.side === "buy" ? "short" : "long", instrument: "stock", quantity: qty,
       entry_price: Number(current.avg_cost), entry_date: String(current.opened_at ?? now).slice(0, 10),
       exit_price: fillPrice, exit_date: now.slice(0, 10), setup: "paper", notes: `Paper trade (${order.type} order)`, external_id: `paper:${order.id}`,
     }).catch(() => {});
