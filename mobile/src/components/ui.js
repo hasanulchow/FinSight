@@ -194,9 +194,21 @@ export function Segmented({ options, value, onChange }) {
   );
 }
 
-export function Stat({ label, value, hint, color, icon, style }) {
+/** Money in a narrow tile: "$100,000" instead of "$100,000.00" from $10k, "$1.25M" from $1M, so it never wraps mid-number. */
+export function fitValue(value) {
+  const m = typeof value === "string" && value.match(/^([+\-−]?)\$([\d,]+)(\.\d+)?$/);
+  if (!m) return value;
+  const n = Number(m[2].replace(/,/g, ""));
+  if (n >= 1e6) return `${m[1]}$${(n / 1e6).toFixed(n >= 1e7 ? 1 : 2)}M`;
+  if (n >= 1e4) return `${m[1]}$${m[2]}`;
+  return value;
+}
+
+export function Stat({ label, value: raw, hint, color, icon, style }) {
   const { c } = useTheme();
   const s = useStyles();
+  const value = fitValue(raw);
+  const money = /^[+\-−]?\$/.test(String(value));
   return (
     <View style={[s.stat, style]}>
       <View style={s.statLabelRow}>
@@ -204,8 +216,8 @@ export function Stat({ label, value, hint, color, icon, style }) {
         <Text style={s.statLabel} numberOfLines={2}>{label}</Text>
       </View>
       {/* Long values (e.g. "Unlimited", "$352.18 / $401.10") step down a size so narrow tiles don't truncate */}
-      <Text style={[s.statValue, String(value).length > 8 && { fontSize: 15 }, String(value).length > 14 && { fontSize: 13 }, color && { color }]} numberOfLines={2} adjustsFontSizeToFit>{value}</Text>
-      {hint ? <Text style={s.statHint} numberOfLines={1}>{hint}</Text> : null}
+      <Text style={[s.statValue, String(value).length > 8 && { fontSize: 15 }, String(value).length > 14 && { fontSize: 13 }, money && String(value).length >= 8 && { fontSize: String(value).length >= 10 ? 13 : 15, letterSpacing: -0.4 }, color && { color }]} numberOfLines={money ? 1 : 2} adjustsFontSizeToFit>{value}</Text>
+      {hint ? <Text style={s.statHint} numberOfLines={2}>{hint}</Text> : null}
     </View>
   );
 }

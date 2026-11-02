@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Pressable, Switch, Text, View } from "react-native";
+import { Pressable, Switch, Text, useWindowDimensions, View } from "react-native";
 import Svg, { Circle, G, Line, Path, Polygon } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../lib/api";
@@ -285,10 +285,10 @@ export function BacktestView({ data }) {
       ) : (
         <>
           <View style={s.btStats}>
-            <Stat label="Trades" value={data.trades} />
-            <Stat label="Win rate" value={`${data.win_rate}%`} />
-            <Stat label="Avg per trade" value={`${data.avg_r > 0 ? "+" : ""}${data.avg_r}R`} color={data.avg_r >= 0 ? c.gain : c.loss} />
-            <Stat label="Total" value={`${data.total_r > 0 ? "+" : ""}${data.total_r}R`} hint={`≈ ${data.account_return_pct}% of account`} color={data.total_r >= 0 ? c.gain : c.loss} />
+            <Stat style={s.tile} label="Trades" value={data.trades} />
+            <Stat style={s.tile} label="Win rate" value={`${data.win_rate}%`} />
+            <Stat style={s.tile} label="Avg per trade" value={`${data.avg_r > 0 ? "+" : ""}${data.avg_r}R`} color={data.avg_r >= 0 ? c.gain : c.loss} />
+            <Stat style={s.tile} label="Total" value={`${data.total_r > 0 ? "+" : ""}${data.total_r}R`} hint={`≈ ${data.account_return_pct}% of account`} color={data.total_r >= 0 ? c.gain : c.loss} />
           </View>
           <View style={s.curve}>
             {/* Cumulative R after each trade: up from the center line when ahead, down when behind */}
@@ -311,6 +311,7 @@ export function BacktestView({ data }) {
 function StrategyGrid({ templates, onPick }) {
   const { c } = useTheme();
   const s = useStyles();
+  const narrow = useWindowDimensions().width < 600;
   const keys = ORDER.filter((k) => templates[k]);
   if (!keys.length) return <Loading />;
   return (
@@ -318,13 +319,17 @@ function StrategyGrid({ templates, onPick }) {
       {keys.map((k) => {
         const t = templates[k];
         return (
-          <Pressable key={k} onPress={() => onPick(k)} style={({ hovered }) => [s.stratCard, hovered && { borderColor: c.primary }]}>
-            <StrategyDiagram strategy={k} height={64} />
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
-              <Text style={s.stratName}>{t.name}</Text>
-              <Pill text={t.direction === "short" ? "Short" : "Long"} color={t.direction === "short" ? c.loss : c.gain} />
+          <Pressable key={k} onPress={() => onPick(k)} accessibilityRole="button" accessibilityLabel={`${t.name} strategy`} style={({ hovered, pressed }) => [s.stratCard, narrow && s.stratRow, hovered && { borderColor: c.primary }, pressed && { opacity: 0.85 }]}>
+            <View style={narrow ? { width: 92 } : null}>
+              <StrategyDiagram strategy={k} height={narrow ? 56 : 64} />
             </View>
-            <Text style={s.stratText} numberOfLines={4}>{t.description}</Text>
+            <View style={{ flex: narrow ? 1 : undefined, minWidth: 0 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: narrow ? 0 : 6, flexWrap: "wrap" }}>
+                <Text style={s.stratName}>{t.name}</Text>
+                <Pill text={t.direction === "short" ? "Short" : "Long"} color={t.direction === "short" ? c.loss : c.gain} />
+              </View>
+              <Text style={s.stratText} numberOfLines={narrow ? 3 : 4}>{t.description}</Text>
+            </View>
           </Pressable>
         );
       })}
@@ -589,5 +594,7 @@ const useStyles = makeStyles((c) => ({
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 14 },
   stratCard: { flexGrow: 1, flexBasis: 240, padding: 12, borderRadius: 16, backgroundColor: c.surfaceAlt, borderWidth: 1, borderColor: c.border },
   stratName: { color: c.text, fontSize: 14.5, fontWeight: "700" },
+  stratRow: { flexBasis: "100%", flexDirection: "row", alignItems: "center", gap: 12 },
+  tile: { flexBasis: 130, flexGrow: 1 },
   stratText: { color: c.textSecondary, fontSize: 12.5, lineHeight: 18, marginTop: 4 },
 }));

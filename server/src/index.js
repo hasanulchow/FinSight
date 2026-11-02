@@ -1,5 +1,6 @@
 import { initMonitoring, reportError } from "./lib/monitoring.js";
 import express from "express";
+import compression from "compression";
 import cors from "cors";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -30,6 +31,8 @@ initMonitoring();
 
 const app = express();
 app.set("trust proxy", 1); // Render and Vercel sit behind one proxy: use the real client IP for rate limits
+// Gzip JSON and the web bundle (about 2 MB down to about 0.55 MB). WebSocket upgrades are not affected.
+app.use(compression());
 app.use(cors());
 app.use(rateLimit());
 // Keep the raw bytes too: Stripe webhook signatures are computed over the exact request body
@@ -40,7 +43,12 @@ app.get("/stream/status", (_req, res) => res.json(streamStatus()));
 
 // Local dev: serves the Expo web build (mobile/dist) when it exists. On Vercel the CDN serves it.
 const webDist = fileURLToPath(new URL("../../mobile/dist", import.meta.url));
-if (existsSync(webDist)) app.use(express.static(webDist));
+// Hashed build files never change, so browsers keep them for a year; index.html is always revalidated so a deploy shows up at once
+if (existsSync(webDist)) {
+  app.use(express.static(webDist, {
+    setHeaders: (res, path) => res.setHeader("Cache-Control", /[\\/](_expo|assets)[\\/]/.test(path) ? "public, max-age=31536000, immutable" : "no-cache"),
+  }));
+}
 
 /**
  * Starts a research run and returns the briefing id immediately.

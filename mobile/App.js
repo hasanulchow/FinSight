@@ -220,7 +220,7 @@ function Shell() {
   else if (top?.type === "backtest") screen = <BacktestScreen key={`b-${top.ticker}`} ticker={top.ticker} onBack={pop} />;
   else if (top?.type === "automations") screen = <AutomationsScreen onBack={pop} />;
   else if (top?.type === "legal") screen = <LegalScreen doc={top.doc} onBack={pop} onChange={(doc) => setStack((st) => [...st.slice(0, -1), { type: "legal", doc }])} />;
-  else if (tab === "today") screen = <TodayScreen onOpenStock={openStock} />;
+  else if (tab === "today") screen = <TodayScreen onOpenStock={openStock} onGoTab={goTab} />;
   else if (tab === "trade") screen = <TradeScreen onOpenStock={openStock} />;
   else if (tab === "markets") screen = <MarketsScreen onOpenStock={openStock} />;
   else if (tab === "screener") screen = <ScreenerScreen onOpenStock={openStock} />;
@@ -237,7 +237,7 @@ function Shell() {
 
   const content = (
     <View style={s.contentOuter}>
-      <View style={[s.content, wide && s.contentWide, wide && tab === "copilot" && !stack.length && { maxWidth: 880 }]}>
+      <View style={[s.content, wide && s.contentWide, wide && tab === "copilot" && !stack.length && { maxWidth: 880 }, wide && tab === "today" && !stack.length && { maxWidth: 1280 }]}>
         <UpgradeContext.Provider value={openAccount}>{screen}</UpgradeContext.Provider>
       </View>
     </View>

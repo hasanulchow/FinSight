@@ -12,7 +12,7 @@ import EventsCard from "../components/EventsCard";
 import AlertSheet from "../components/AlertSheet";
 import RedFlagsCard from "../components/RedFlagsCard";
 import { PatternCard } from "../components/Bots";
-import { ForecastCard } from "../components/Forecasts";
+import { ForecastCard, AskSheet } from "../components/Forecasts";
 import PositionSizerSheet from "../components/PositionSizerSheet";
 import OrderSheet from "../components/OrderSheet";
 import EarningsSheet from "../components/EarningsSheet";
@@ -30,6 +30,7 @@ export default function StockScreen({ ticker, onBack, onBrief, onOptions, onBack
   const [earningsOpen, setEarningsOpen] = useState(false);
   const [toast, setToast] = useState(null);
   const [briefing, setBriefing] = useState(false);
+  const [asking, setAsking] = useState(false);
 
   useEffect(() => {
     api.technicals(ticker).then(setTech).catch((e) => setTechError(e.message));
@@ -69,6 +70,7 @@ export default function StockScreen({ ticker, onBack, onBrief, onOptions, onBack
     { key: "size", label: "Size it", sub: "Shares for your risk", section: sections.risk, onPress: () => setSizerOpen(true) },
     { key: "alert", label: "Alert", sub: "Price, RSI, earnings…", section: sections.alerts, onPress: () => setAlertOpen(true) },
     { key: "earnings", label: "Earnings", sub: "Implied vs past moves", section: sections.events, onPress: () => setEarningsOpen(true) },
+    { key: "forecast", label: "Forecast", sub: "Call where it closes", section: sections.forecasts, onPress: () => setAsking(true) },
   ];
 
   return (
@@ -79,7 +81,7 @@ export default function StockScreen({ ticker, onBack, onBrief, onOptions, onBack
         <View style={s.heroTop}>
           <TickerAvatar ticker={ticker} size={54} />
           <View style={{ flex: 1 }}>
-            <Text style={s.ticker}>{ticker}</Text>
+            <Text style={s.ticker} numberOfLines={1}>{tech?.name && tech.name.toUpperCase() !== ticker ? `${ticker} · ${tech.name}` : ticker}</Text>
             {price != null ? (
               <View style={s.priceRow}>
                 <Text style={s.price}>${Number(price).toFixed(2)}</Text>
@@ -109,7 +111,7 @@ export default function StockScreen({ ticker, onBack, onBrief, onOptions, onBack
                 <Ionicons name={t.section.icon} size={18} color={t.section.color} />
               </View>
               <Text style={s.toolTitle}>{t.label}</Text>
-              <Text style={s.toolSub} numberOfLines={1}>{t.sub}</Text>
+              <Text style={s.toolSub} numberOfLines={2}>{t.sub}</Text>
             </Pressable>
           ))}
         </View>
@@ -134,6 +136,7 @@ export default function StockScreen({ ticker, onBack, onBrief, onOptions, onBack
       <OrderSheet visible={!!orderSide} onClose={() => setOrderSide(null)} ticker={ticker} side={orderSide ?? "buy"} mode="paper" onPlaced={(o) => setToast({ tone: "success", text: o.status === "filled" ? `Paper order filled at ${Number(o.filled_price).toFixed(2)}. See it in Trade.` : "Paper order placed. See it in Trade." })} />
       <EarningsSheet ticker={ticker} visible={earningsOpen} onClose={() => setEarningsOpen(false)} />
       <PositionSizerSheet ticker={ticker} price={snap?.price} visible={sizerOpen} onClose={() => setSizerOpen(false)} />
+      <AskSheet visible={asking} ticker={ticker} onClose={() => setAsking(false)} onAsked={() => { setAsking(false); setToast({ tone: "success", text: "Question added. Make your forecast below or in the Forecasts tab." }); }} />
       <AlertSheet ticker={ticker} price={snap?.price} visible={alertOpen} onClose={() => setAlertOpen(false)} onCreated={() => setToast({ tone: "success", text: "Alert created. Find it in the Alerts tab." })} />
     </ScrollView>
   );

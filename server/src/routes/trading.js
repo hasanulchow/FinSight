@@ -16,7 +16,7 @@ import { getOptionsOverview, strategyFromOverview, STRATEGIES } from "../lib/opt
 import { optionsAnalyst } from "../agents/optionsAnalyst.js";
 import { runBacktest, BACKTEST_STRATEGIES } from "../lib/backtest.js";
 import { getMarketOverview, compareTickers } from "../lib/market.js";
-import { getEarningsCalendar } from "../tools/quote.js";
+import { getEarningsCalendar, companyName } from "../tools/quote.js";
 import { reportError } from "../lib/monitoring.js";
 
 // Routes for the trading features: technical analysis, alerts + notifications, screener,
@@ -59,7 +59,8 @@ export function registerTradingRoutes(app) {
     const bars = await getDailyBars(ticker);
     if (bars.length < 30) return res.status(404).json({ error: `Not enough price history for ${ticker}` });
     const snapshot = technicalSnapshot(bars);
-    const out = { ticker, snapshot, chart: chartSeries(bars, Number(req.query.days) || 180) };
+    const name = (await companyName(ticker)) ?? (await lookupCompany(ticker).catch(() => null))?.name ?? null;
+    const out = { ticker, name, snapshot, chart: chartSeries(bars, Number(req.query.days) || 180) };
     if (req.query.explain === "1") {
       await aiQuota(req.user.id, "technicals");
       const company = (await lookupCompany(ticker)) ?? { name: ticker, ticker };

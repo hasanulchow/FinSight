@@ -64,10 +64,10 @@ export default function ForecastsScreen({ onOpenStock }) {
 
       {stats && (
         <View style={s.stats}>
-          <Stat label="Points · 30 days" value={`${m.points > 0 ? "+" : ""}${m.points}`} color={m.points >= 0 ? c.gain : c.loss} hint={`${m.resolved} resolved · ${stats.open} open`} />
-          <Stat label="Beat the market" value={m.beat_market_pct != null ? `${m.beat_market_pct}%` : "–"} hint="of your calls vs options odds" />
-          <Stat label="Accuracy" value={m.accuracy != null ? `${m.accuracy}%` : "–"} hint="right side of 50%" />
-          <Stat label="Brier score" value={m.brier ?? "–"} hint={m.market_brier != null ? `market ${m.market_brier} · lower is better` : "lower is better"} />
+          <Stat style={s.tile} label="Points · 30 days" value={`${m.points > 0 ? "+" : ""}${m.points}`} color={m.points >= 0 ? c.gain : c.loss} hint={`${m.resolved} resolved · ${stats.open} open`} />
+          <Stat style={s.tile} label="Beat the market" value={m.beat_market_pct != null ? `${m.beat_market_pct}%` : "–"} hint="of your calls vs options odds" />
+          <Stat style={s.tile} label="Accuracy" value={m.accuracy != null ? `${m.accuracy}%` : "–"} hint="right side of 50%" />
+          <Stat style={s.tile} label="Brier score" value={m.brier ?? "–"} hint={m.market_brier != null ? `market ${m.market_brier} · lower is better` : "lower is better"} />
         </View>
       )}
 
@@ -185,6 +185,7 @@ function YouPanel({ stats, onSaved }) {
 const useStyles = makeStyles((c) => ({
   scroll: { padding: 16, paddingBottom: 60 },
   stats: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 },
+  tile: { flexBasis: 150, flexGrow: 1 },
   group: { color: c.muted, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 },
   muted: { color: c.muted, fontSize: 12, lineHeight: 17 },
   boardRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 9, paddingHorizontal: 8, borderRadius: 10 },

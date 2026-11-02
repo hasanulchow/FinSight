@@ -47,6 +47,11 @@ async function profile(ticker) {
   return profiles.get(ticker);
 }
 
+/** Company name from the cached profile ("NVIDIA Corp"), or null. */
+export async function companyName(ticker) {
+  return (await profile(ticker).catch(() => null))?.name || null;
+}
+
 /** Quote + name/sector only (2 calls, profile cached): for portfolios with many holdings. */
 export async function getQuoteLite(ticker) {
   const [quote, p] = await Promise.all([finnhub("/quote", { symbol: ticker }), profile(ticker)]);

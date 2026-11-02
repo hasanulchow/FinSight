@@ -10,6 +10,7 @@ import CandleChart from "../components/CandleChart";
 import PayoffChart from "../components/PayoffChart";
 import Heatmap from "../components/Heatmap";
 import { EXAMPLE_TILES, exampleCandles, exampleCondor } from "../landing/examples";
+import { StrategyDiagram } from "../components/Bots";
 
 // Public landing page (web, signed out). Every product visual here is an illustrative mock built from
 // the app's own components and clearly labeled; the page never presents made-up numbers as real data.
@@ -30,6 +31,8 @@ const TRUST = [
 const FAQ = [
   ["Is this investment advice?", "No. FinSight explains data and filings in plain language. It never recommends buying, selling or holding, and every screen says so."],
   ["Can I trade in FinSight?", "Yes. Practice with $100,000 of paper money and live prices. Where your broker supports it, you can also place real orders in your own brokerage account; you review and confirm every order, and your money stays at your broker."],
+  ["What are trading bots?", "Rule-based strategies (bull and bear flags, new-high breakouts, pullbacks, oversold bounces and volatility squeezes) that scan your stocks and trade your practice account with a stop, a target and position sizing. Every bot has a backtest. For real money a bot can only alert you; you place the order."],
+  ["What are Forecasts?", "A play-money game: give your odds that a stock closes above a price on a date, and see how you compare with the options market and other users. Points reward accuracy. There's no real money, no prizes and no payouts."],
   ["Will the AI act on its own?", "No. The Copilot can never place real trades. Anything it suggests changing, like an alert, a journal entry or a practice order, waits for you to tap Confirm."],
   ["Where does the data come from?", "Quotes and fundamentals from Finnhub, price history and options data from Massive (formerly Polygon.io), and company filings directly from SEC EDGAR."],
   ["How accurate is the AI?", "Numbers come from code, not the AI. Briefings are checked for quotes that really appear in the filing and numbers that match the source data, then scored by an independent AI judge."],
@@ -38,8 +41,8 @@ const FAQ = [
 ];
 
 const PLANS = [
-  { key: "free", name: "Free", price: { month: "$0", year: "$0" }, note: "Forever", cta: "Start free", perks: ["3 AI briefings and 15 Copilot messages a day", "Practice trading with $100k", "Trade journal, rules checklist and position sizer", "5 alerts and a 10-stock watchlist"] },
-  { key: "pro", name: "Pro", price: { month: "$19", year: "$190" }, note: { month: "per month", year: "per year · 2 months free" }, cta: "Start free trial", featured: true, perks: ["40 briefings and 300 Copilot messages a day", "Morning brief and daily thesis checks", "AI journal coach, earnings companion, automations", "100 alerts, 100-stock watchlist, broker sync"] },
+  { key: "free", name: "Free", price: { month: "$0", year: "$0" }, note: "Forever", cta: "Start free", perks: ["3 AI briefings and 15 Copilot messages a day", "Practice trading with $100k, long or short", "1 trading bot, Forecasts and live charts", "Journal, rules checklist, 5 alerts, 10-stock watchlist"] },
+  { key: "pro", name: "Pro", price: { month: "$19", year: "$190" }, note: { month: "per month", year: "per year · 2 months free" }, cta: "Start free trial", featured: true, perks: ["40 briefings and 300 Copilot messages a day", "Morning brief and daily thesis checks", "10 trading bots, AI journal coach, automations", "100 alerts, 100-stock watchlist, broker sync"] },
 ];
 
 export default function LandingScreen({ onStart, onOpenLegal }) {
@@ -66,7 +69,7 @@ export default function LandingScreen({ onStart, onOpenLegal }) {
           <Logo size={30} />
           {wide && (
             <View style={s.navLinks}>
-              {[["product", "Product"], ["trading", "Trading"], ["pricing", "Pricing"], ["faq", "FAQ"]].map(([k, label]) => (
+              {[["product", "Product"], ["trading", "Trading"], ["automation", "Bots"], ["pricing", "Pricing"], ["faq", "FAQ"]].map(([k, label]) => (
                 <Pressable key={k} onPress={() => scrollTo(k)} style={({ hovered }) => [s.navLink, hovered && { backgroundColor: c.surfaceAlt }]}>
                   <Text style={s.navLinkText}>{label}</Text>
                 </Pressable>
@@ -87,9 +90,9 @@ export default function LandingScreen({ onStart, onOpenLegal }) {
           <View style={[s.gridBg, { opacity: c.dark ? 0.35 : 0.5 }]} pointerEvents="none" />
           <View style={[s.container, s.hero, wide && { flexDirection: "row", alignItems: "center", gap: 56 }]}>
             <View style={[wide ? { flex: 1.1 } : { alignItems: "center" }]}>
-              <Pressable onPress={() => scrollTo("trading")} style={({ hovered }) => [s.announce, !wide && { alignSelf: "center" }, hovered && { borderColor: c.primary }]}>
+              <Pressable onPress={() => scrollTo("automation")} style={({ hovered }) => [s.announce, !wide && { alignSelf: "center" }, hovered && { borderColor: c.primary }]}>
                 <View style={s.announceTag}><Text style={s.announceTagText}>New</Text></View>
-                <Text style={s.announceText}>Practice trading and an AI trading coach</Text>
+                <Text style={s.announceText}>New: trading bots, live charts and Forecasts</Text>
                 <Ionicons name="arrow-forward" size={14} color={c.textSecondary} />
               </Pressable>
               <Text style={[s.h1, !wide && { textAlign: "center" }, !medium && { fontSize: 42, lineHeight: 47, letterSpacing: -1.6 }]}>
@@ -157,7 +160,7 @@ export default function LandingScreen({ onStart, onOpenLegal }) {
             </BentoTile>
           </View>
           <View style={s.moreFeatures}>
-            {["Red-flag radar", "Thesis tracker", "Position sizer", "Options strategies", "Backtester", "Plain-English screener", "Portfolio vs S&P 500", "Tax center", "Smart alerts", "Broker sync", "Automations", "Weekly email report"].map((f) => (
+            {["Live streaming prices", "Short selling (practice)", "Red-flag radar", "Thesis tracker", "Position sizer", "Options strategies", "Backtester", "Plain-English screener", "Portfolio vs S&P 500", "Tax center", "Smart alerts", "Broker sync", "Automations", "Weekly email report"].map((f) => (
               <View key={f} style={s.moreChip}>
                 <Ionicons name="checkmark" size={13} color={c.primary} />
                 <Text style={s.moreChipText}>{f}</Text>
@@ -189,7 +192,7 @@ export default function LandingScreen({ onStart, onOpenLegal }) {
           <SectionHead kicker="Trading" title="Practice like a pro. Trade when you're ready." lead="Start with a $100,000 practice account. When you're ready, place real orders in your own brokerage account from FinSight. Your money never leaves your broker." center />
           <View style={[s.tradeGrid, medium && { flexDirection: "row" }]}>
             {[
-              ["school-outline", "Paper trading", "Market, limit and stop orders with live prices during market hours. Every closed trade lands in your journal."],
+              ["school-outline", "Paper trading", "Market, limit and stop orders, long or short, on live streaming prices. Every closed trade lands in your journal."],
               ["list-outline", "Your rules, enforced", "Set rules like “always use a stop” or “no trades after a loss.” Every order is checked before you place it."],
               ["link-outline", "Your broker, your money", "Connect Schwab, Fidelity, IBKR and more. Review the broker's preview, then confirm. FinSight never holds funds."],
             ].map(([icon, title, text]) => (
@@ -210,6 +213,29 @@ export default function LandingScreen({ onStart, onOpenLegal }) {
               <Heatmap tiles={EXAMPLE_TILES} />
             </View>
           </View>
+        </View>
+
+        {/* ---------- Automation & predictions ---------- */}
+        <View onLayout={anchor("automation")} style={[s.container, s.section]}>
+          <SectionHead kicker="Automate and predict" title="Let bots do the watching. Put your instincts to the test." lead="Rule-based bots scan for setups and trade your practice account on their own. Live charts and streaming prices keep every screen current. Forecasts turn your market view into odds you can score." center />
+          <View style={[s.tradeGrid, medium && { flexDirection: "row" }]}>
+            <View style={[s.tradeCard, medium && { flex: 1 }]}>
+              <BotsMini />
+              <Text style={s.cardTitle}>Trading bots</Text>
+              <Text style={s.cardText}>Six strategies, from bull and bear flags to oversold bounces and squeezes. Backtest each one in R, then let it enter, stop out and take profit in your practice account, or just alert you.</Text>
+            </View>
+            <View style={[s.tradeCard, medium && { flex: 1 }]}>
+              <LiveMini />
+              <Text style={s.cardTitle}>Live charts and prices</Text>
+              <Text style={s.cardText}>TradingView charts from 1-minute to weekly candles, with drawing tools and indicators, plus streaming prices across your watchlist, positions and order ticket.</Text>
+            </View>
+            <View style={[s.tradeCard, medium && { flex: 1 }]}>
+              <ForecastMini />
+              <Text style={s.cardTitle}>Forecasts</Text>
+              <Text style={s.cardText}>"Will it close above $210 on Friday?" Give your odds, see the options market's and the crowd's, and earn points for being right. Play money only.</Text>
+            </View>
+          </View>
+          <Text style={[s.showcaseSub, { textAlign: "center", marginTop: 14 }]}>Illustrative examples, not real data</Text>
         </View>
 
         {/* ---------- How it works ---------- */}
@@ -323,7 +349,7 @@ export default function LandingScreen({ onStart, onOpenLegal }) {
               <Logo size={28} />
               <Text style={s.footerText}>An AI research team, a trading coach and a practice account for self-directed investors.</Text>
             </View>
-            <FooterCol title="Product" links={[["Features", () => scrollTo("product")], ["Trading", () => scrollTo("trading")], ["Pricing", () => scrollTo("pricing")], ["FAQ", () => scrollTo("faq")]]} />
+            <FooterCol title="Product" links={[["Features", () => scrollTo("product")], ["Trading", () => scrollTo("trading")], ["Bots and Forecasts", () => scrollTo("automation")], ["Pricing", () => scrollTo("pricing")], ["FAQ", () => scrollTo("faq")]]} />
             <FooterCol title="Legal" links={[["Terms of Service", () => onOpenLegal?.("terms")], ["Privacy Policy", () => onOpenLegal?.("privacy")], ["Risk Disclaimer", () => onOpenLegal?.("disclaimer")]]} />
             <FooterCol title="Account" links={[["Sign in", () => onStart("signin")], ["Create account", () => onStart("signup")]]} />
           </View>
@@ -410,6 +436,52 @@ function FooterCol({ title, links }) {
 }
 
 // ---------- Illustrative product mocks (built from real app styling) ----------
+
+/** Two strategy sketches side by side. */
+function BotsMini() {
+  const s = useStyles();
+  return (
+    <View style={[s.miniPanel, { flexDirection: "row", gap: 8 }]}>
+      <View style={{ flex: 1 }}><StrategyDiagram strategy="bull_flag_breakout" height={58} /></View>
+      <View style={{ flex: 1 }}><StrategyDiagram strategy="bear_flag_breakdown" height={58} /></View>
+    </View>
+  );
+}
+
+/** A small watchlist with live dots (illustrative). */
+function LiveMini() {
+  const { c } = useTheme();
+  const s = useStyles();
+  return (
+    <View style={s.miniPanel}>
+      {[["XMPL", "128.42", "+1.84%", true], ["DEMO", "47.10", "−0.62%", false], ["SMPL", "312.05", "+0.31%", true]].map(([t, p, ch, up]) => (
+        <View key={t} style={s.miniRow}>
+          <View style={[s.miniDot, { backgroundColor: c.gain }]} />
+          <Text style={s.miniTicker}>{t}</Text>
+          <Text style={s.miniPrice}>{p}</Text>
+          <Text style={[s.miniChg, { color: up ? c.gain : c.loss }]}>{ch}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/** Odds bars from a forecast card (illustrative). */
+function ForecastMini() {
+  const { c } = useTheme();
+  const s = useStyles();
+  return (
+    <View style={s.miniPanel}>
+      {[["Options market", 0.34, c.primary], ["Crowd", 0.41, c.hue("violet")], ["You", 0.25, c.hue("amber")]].map(([l, v, col]) => (
+        <View key={l} style={s.miniRow}>
+          <Text style={[s.miniLabel]}>{l}</Text>
+          <View style={s.miniTrack}><View style={[s.miniFill, { width: `${v * 100}%`, backgroundColor: col }]} /></View>
+          <Text style={[s.miniChg, { color: col }]}>{Math.round(v * 100)}%</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
 
 function HeroDevice({ compact }) {
   const { c } = useTheme();
@@ -682,6 +754,15 @@ const useStyles = makeStyles((c) => ({
   // Trading
   tradeGrid: { gap: 16, marginTop: 44 },
   tradeCard: { backgroundColor: c.surface, borderRadius: 22, borderWidth: 1, borderColor: c.border, padding: 22 },
+  miniPanel: { backgroundColor: c.surfaceAlt, borderRadius: 16, padding: 12, marginBottom: 16, gap: 8, minHeight: 82, justifyContent: "center" },
+  miniRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  miniDot: { width: 6, height: 6, borderRadius: 3 },
+  miniTicker: { color: c.text, fontSize: 12.5, fontWeight: "800", width: 46 },
+  miniPrice: { color: c.text, fontSize: 12.5, fontWeight: "600", flex: 1, fontVariant: ["tabular-nums"] },
+  miniChg: { fontSize: 12, fontWeight: "700", minWidth: 40, textAlign: "right", fontVariant: ["tabular-nums"] },
+  miniLabel: { color: c.textSecondary, fontSize: 11.5, width: 92 },
+  miniTrack: { flex: 1, height: 7, borderRadius: 4, backgroundColor: c.border, overflow: "hidden" },
+  miniFill: { height: 7, borderRadius: 4 },
   tradeIcon: { width: 42, height: 42, borderRadius: 13, backgroundColor: c.primarySoft, alignItems: "center", justifyContent: "center", marginBottom: 16 },
   proRow: { gap: 16, marginTop: 16 },
   // Steps

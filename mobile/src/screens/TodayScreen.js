@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../lib/api";
 import { makeStyles, useTheme, font } from "../theme";
@@ -8,16 +8,21 @@ import { ErrorNotice } from "../components/Upgrade";
 import Sheet from "../components/Sheet";
 import { useLivePrices } from "../lib/live";
 import EarningsSheet from "../components/EarningsSheet";
+import { MarketPulse, PracticeCard, ForecastsTeaser, BotsCard } from "../components/TodayRail";
 
 const greeting = () => {
   const h = new Date().getHours();
   return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
 };
 
-/** Today: the AI morning brief plus the watchlist with thesis tracking. */
-export default function TodayScreen({ onOpenStock }) {
+/**
+ * Today: the AI morning brief and the watchlist with thesis tracking, plus the market, the practice account,
+ * this week's forecasts and bot activity (a right-hand rail on wide screens).
+ */
+export default function TodayScreen({ onOpenStock, onGoTab = () => {} }) {
   const { c, sections } = useTheme();
   const s = useStyles();
+  const wide = useWindowDimensions().width >= 1180;
   const [brief, setBrief] = useState(null);
   const [watch, setWatch] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -80,6 +85,9 @@ export default function TodayScreen({ onOpenStock }) {
   return (
     <ScrollView contentContainerStyle={s.scroll} refreshControl={<RefreshControl refreshing={loading && !!watch} onRefresh={load} tintColor={c.primary} />}>
       <PageHeader eyebrow={new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })} title={greeting()} subtitle="What changed for the stocks you own and watch." />
+      <View style={wide ? s.columns : null}>
+      <View style={wide ? s.main : null}>
+      {!wide && <MarketPulse onOpenStock={onOpenStock} />}
       <ErrorNotice error={error} />
       {loading && !watch && <Loading text="Loading your day…" />}
 
@@ -155,11 +163,11 @@ export default function TodayScreen({ onOpenStock }) {
                   <TickerAvatar ticker={w.ticker} size={40} />
                 </Pressable>
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <View style={s.watchHead}>
+                  <Pressable onPress={() => onOpenStock(w.ticker)} accessibilityRole="button" accessibilityLabel={`Open ${w.ticker}`} style={s.watchHead}>
                     <Text style={s.watchTicker}>{w.ticker}</Text>
                     <LivePrice q={live.prices[w.ticker]} />
                     {w.thesis && label ? <Pill text={label} color={color} icon={icon} /> : null}
-                  </View>
+                  </Pressable>
                   {w.thesis ? <Text style={s.thesis} numberOfLines={2}>“{w.thesis}”</Text> : <Text style={s.muted}>No thesis yet</Text>}
                   {w.last_check?.summary && <Text style={s.verdict}>{w.last_check.summary}</Text>}
                   {w.last_check?.what_to_watch?.length > 0 && <Text style={s.muted}>Watch: {w.last_check.what_to_watch.join(" · ")}</Text>}
@@ -175,6 +183,15 @@ export default function TodayScreen({ onOpenStock }) {
           })}
         </SectionCard>
       )}
+
+      </View>
+      <View style={wide ? s.rail : null}>
+        {wide && <MarketPulse onOpenStock={onOpenStock} />}
+        <PracticeCard onGoTab={onGoTab} />
+        <ForecastsTeaser onGoTab={onGoTab} onOpenStock={onOpenStock} />
+        <BotsCard onGoTab={onGoTab} />
+      </View>
+      </View>
 
       <Disclaimer>Briefs and thesis checks are AI summaries of public data. They can be wrong and are not investment advice.</Disclaimer>
       <EarningsSheet ticker={earningsTicker} visible={!!earningsTicker} onClose={() => setEarningsTicker(null)} />
@@ -251,6 +268,9 @@ function WatchSheet({ item, onClose, onSaved }) {
 
 const useStyles = makeStyles((c) => ({
   scroll: { padding: 16, paddingBottom: 60 },
+  columns: { flexDirection: "row", gap: 18, alignItems: "flex-start" },
+  main: { flex: 1, minWidth: 0 },
+  rail: { width: 360 },
   muted: { color: c.muted, fontSize: 13, lineHeight: 19 },
   headline: { color: c.text, fontSize: 17, fontWeight: "800", lineHeight: 24 },
   note: { color: c.textSecondary, fontSize: 14, lineHeight: 20, marginTop: 6 },
