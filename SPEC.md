@@ -805,3 +805,26 @@ Schema: `supabase/004_options_markets.sql` adds `kv_cache`, a shared cache for o
 - Order side `short`; `applyFill` keeps short positions as negative quantities with a weighted average cost. A buy on a short covers it (no flipping in one order). Selling a short or shorting a long is refused.
 - Buying power = cash − open buy reservations (not covers) − 50% of open short orders − 150% of short market value.
 - Migration `009` changes `paper_positions.qty` to `<> 0` and adds `short` to `paper_orders.side`.
+
+## 24. v2.1 Forecasts (play-money predictions)
+
+### 24.1 Model
+- `forecast_questions` (shared): ticker, strike, resolve_date, status (open, resolved, void), source (auto or user), created_by, ref_price, sigma and sigma_source ("options" or "volatility"), outcome, close_price, final_market_prob. Unique on (ticker, strike, resolve_date).
+- `forecasts`: one per user per question. prob (0 to 1), market_prob and price_at when made, then outcome, points and resolved_at.
+- `forecast_profiles`: optional leaderboard nickname (3 to 20 characters, unique ignoring case).
+- Migration `010`. The app never reads other users' forecasts directly; it gets aggregates (crowd odds, counts) from the API.
+
+### 24.2 Rules (`server/src/lib/forecasts.js`)
+- Dates are US Eastern; holidays aren't modeled. Weekly questions resolve on this Friday when at least two sessions remain, else next Friday.
+- Weekly strikes: the price and ±0.6 expected moves (price × σ × √T), rounded to $0.5/1/2/5/10/20/50.
+- Market odds = `probAbove` (Black-Scholes N(d2)) with σ from `getOptionsOverview` for that expiration (implied from the chain or at-the-money option prices), else 60-day historical volatility. Clamped to 1% to 99%. Volatility refreshes daily.
+- Forecasts: integers 1 to 99%, editable until 9:30 ET on the resolution day.
+- Resolution: after 4:15 ET on the date, once daily bars reach it; outcome = the close of the last session on or before the date > strike. final_market_prob uses the prior close.
+- Points = round(100 − 400 × (p − outcome)²). Summaries: points, Brier, market Brier on the same forecasts, accuracy (right side of 50%), share of forecasts with a lower Brier than the market, and calibration in 10% bands.
+- Leaderboard: at least 5 resolved forecasts; 30 days or all time; ranked by points, then Brier.
+- User questions: valid ticker, strike within ±50% of the price, a weekday from tomorrow to 90 days out, 5 a day.
+
+### 24.3 API and jobs
+- `GET /forecasts/questions?status=open|resolved&ticker=`, `POST /forecasts/questions`, `POST /forecasts`, `GET /forecasts/me`, `GET /forecasts/leaderboard?period=30d|all`, `PATCH /forecasts/profile`.
+- The `forecasts` job resolves due questions, creates the week's set and refreshes volatility. The first question listing on a fresh server also starts the weekly set in the background.
+- Account deletion removes `forecasts` and `forecast_profiles`; questions a user asked stay (created_by is set to null).

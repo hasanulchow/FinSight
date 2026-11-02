@@ -185,5 +185,12 @@ export const api = {
   backtestBot: (id) => request(`/bots/${id}/backtest`, { method: "POST" }),
   backtestConfig: (config) => request("/bots/backtest", { method: "POST", body: JSON.stringify({ config }) }),
   patterns: (ticker) => request(`/stocks/${encodeURIComponent(ticker)}/patterns`),
+  // Forecasts (play-money predictions)
+  forecastQuestions: ({ status = "open", ticker } = {}) => request(`/forecasts/questions?status=${status}${ticker ? `&ticker=${encodeURIComponent(ticker)}` : ""}`),
+  askForecast: (q) => request("/forecasts/questions", { method: "POST", body: JSON.stringify(q) }),
+  forecast: (questionId, prob) => request("/forecasts", { method: "POST", body: JSON.stringify({ question_id: questionId, prob }) }),
+  forecastStats: () => request("/forecasts/me"),
+  forecastLeaderboard: (period = "30d") => request(`/forecasts/leaderboard?period=${period}`),
+  setForecastName: (nickname) => request("/forecasts/profile", { method: "PATCH", body: JSON.stringify({ nickname }) }),
   marketRegime: () => request("/market/regime"),
 };

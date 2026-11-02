@@ -52,6 +52,12 @@ const ICONS = {
       <Path d="M3.5 5h17l-6.5 7.5v5.5l-4 2v-7.5z" fill={fill} />
     </>
   ),
+  forecasts: (fill) => (
+    <>
+      <Path d="M3.5 16a8.5 8.5 0 0 1 17 0z" fill={fill} />
+      <Path d="M3.5 16a8.5 8.5 0 0 1 17 0M12 16l3.5-5M2.5 19.5h19" />
+    </>
+  ),
   alerts: (fill) => (
     <>
       <Path d="M6 16.5V11a6 6 0 1 1 12 0v5.5l1.5 2h-15z" fill={fill} />

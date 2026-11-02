@@ -19,6 +19,7 @@ import { registerSaasRoutes } from "./routes/saas.js";
 import { registerGrowthRoutes } from "./routes/growth.js";
 import { registerTradeRoutes } from "./routes/trade.js";
 import { registerBotRoutes } from "./routes/bots.js";
+import { registerForecastRoutes } from "./routes/forecasts.js";
 import { rateLimit } from "./lib/rateLimit.js";
 import { attachStream, streamStatus } from "./lib/stream.js";
 import { runPaperOrders } from "./lib/paper.js";
@@ -313,6 +314,7 @@ registerSaasRoutes(app);
 registerGrowthRoutes(app);
 registerTradeRoutes(app);
 registerBotRoutes(app);
+registerForecastRoutes(app);
 
 // Last resort for errors thrown outside the route helpers
 app.use((err, req, res, _next) => {

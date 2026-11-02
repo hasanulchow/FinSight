@@ -16,6 +16,7 @@ import HomeScreen from "./src/screens/HomeScreen";
 import BriefingScreen from "./src/screens/BriefingScreen";
 import StockScreen from "./src/screens/StockScreen";
 import ScreenerScreen from "./src/screens/ScreenerScreen";
+import ForecastsScreen from "./src/screens/ForecastsScreen";
 import PortfolioScreen from "./src/screens/PortfolioScreen";
 import AlertsScreen from "./src/screens/AlertsScreen";
 import MarketsScreen from "./src/screens/MarketsScreen";
@@ -46,13 +47,14 @@ const SECTIONS = [
   { key: "markets", label: "Markets", icon: "globe", section: "markets", sub: "Indexes, sectors, movers and heatmap" },
   { key: "journal", label: "Journal", icon: "journal", section: "journal", sub: "Trades, stats, rules and AI coach" },
   { key: "screener", label: "Screener", icon: "funnel", section: "screener", sub: "Find stocks in plain English" },
+  { key: "forecasts", label: "Forecasts", icon: "telescope", section: "forecasts", sub: "Predict where stocks close, play money" },
   { key: "alerts", label: "Alerts", icon: "notifications", section: "alerts", sub: "Price, indicator and earnings alerts" },
   { key: "tax", label: "Tax center", icon: "receipt", section: "redflags", sub: "Realized gains, wash sales, harvesting" },
   { key: "account", label: "Account", icon: "person-circle", section: "account", sub: "Plan, invites, settings and privacy" },
 ];
 const GROUPS = [
   ["Home", ["today", "copilot", "trade", "portfolio"]],
-  ["Research", ["research", "markets", "screener", "journal"]],
+  ["Research", ["research", "markets", "screener", "forecasts", "journal"]],
   ["Account", ["alerts", "tax", "account", "admin"]],
 ];
 const ADMIN = { key: "admin", label: "Admin", icon: "stats-chart", section: "benchmark", sub: "Users, revenue and AI cost" };
@@ -222,6 +224,7 @@ function Shell() {
   else if (tab === "trade") screen = <TradeScreen onOpenStock={openStock} />;
   else if (tab === "markets") screen = <MarketsScreen onOpenStock={openStock} />;
   else if (tab === "screener") screen = <ScreenerScreen onOpenStock={openStock} />;
+  else if (tab === "forecasts") screen = <ForecastsScreen onOpenStock={openStock} />;
   else if (tab === "portfolio") screen = <PortfolioScreen onOpenStock={openStock} onOpenTax={() => goTab("tax")} />;
   else if (tab === "alerts") screen = <AlertsScreen onOpenStock={openStock} onUnreadChange={setUnread} />;
   else if (tab === "copilot") screen = <CopilotScreen onOpenStock={openStock} onOpenAutomations={() => push({ type: "automations" })} />;

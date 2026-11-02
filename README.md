@@ -224,6 +224,19 @@ Six strategies now, all on the same engine (`lib/strategies.js`). Each strategy 
 
 The test period was mostly a rising market, which is hard for shorts, and SPY was almost never below its 200-day, so the bear flag defaults to "not a strong uptrend". The pullback strategy lost money with a stop under the 3-day low (−0.13R a trade), so it uses a 2× ATR stop and a 2R target. These are small samples with no fees, slippage or borrow costs, and past results don't predict future returns.
 
+### Forecasts (v2.1)
+
+A play-money prediction game, in the spirit of Kalshi or Polymarket but without real money: **"Will NVDA close above $210 on Fri, Nov 6?"**
+
+- **Questions.** Every week the job creates three questions for each popular ticker (`FORECAST_TICKERS`, default SPY, QQQ, AAPL, NVDA, TSLA, MSFT, AMZN, META, GOOGL, AMD), resolving on Friday's close. Strikes sit at the price and about 0.6 expected moves either side, so the odds start near 25%, 50% and 75%. Users can ask their own (any ticker, a weekday up to 90 days out, 5 a day), and questions are shared.
+- **Market odds.** The options market's probability of closing above the strike: Black-Scholes N(d2) at the implied volatility for that expiration, recomputed from the live price on every view. Without option prices, the same model runs at 60-day historical volatility and is labeled "Volatility model".
+- **Forecasts.** Pick a probability (5% to 95%); you can change it until the open on the resolution day. The crowd's odds appear after you forecast, so your call is your own.
+- **Scoring.** Points = 100 − 400 × Brier score: 50% scores 0, 90% scores +96 if right and −224 if wrong. Each forecast stores the market odds at that moment, so you can see how often you beat the market.
+- **Results.** After the close, questions resolve on the official daily close, users get a notification with their points, and the leaderboard (30 days or all time, at least 5 resolved forecasts, optional nickname) and your calibration chart update.
+- **Where:** the Forecasts tab (Research group, or More on phones), plus a Forecasts card on every stock page.
+
+No money, prizes or payouts. Real-money event contracts need a regulated exchange, so this is a learning game by design.
+
 ### Live market data (v1.9)
 
 - **Live chart.** The stock page embeds TradingView's free Advanced Chart widget (`components/LiveChart.js`): 1m to 1W candles that update in real time, plus drawing tools and indicators. The app loads TradingView's hosted widget page in a cross-origin iframe (web) or a WebView (iOS/Android), so their code never runs on this app's origin or sees the session. TradingView's terms require the attribution link under the chart; keep it.
@@ -247,7 +260,7 @@ The test period was mostly a rising market, which is hard for shorts, and SPY wa
 
 ### 1. Supabase
 1. Create a project at supabase.com.
-2. In the SQL editor, run `supabase/schema.sql`, then `supabase/002_memory_guardrails_embeddings.sql` (pgvector, memory, chat, guardrail log), then `supabase/003_trading_features.sql` (price cache, alerts, notifications, push tokens, screener, earnings cache, holdings), then `supabase/004_options_markets.sql` (shared cache for options and market data), then `supabase/005_copilot_journal_billing.sql` (journal, Copilot, plans, usage and subscriptions), then `supabase/006_proactive_growth.sql` (settings and onboarding, watchlist and theses, morning briefs, automations, broker connections, AI cost log, share links), then `supabase/007_trading_email_billing.sql` (paper trading, live orders, weekly email, annual plan and cancel feedback), then `supabase/008_trading_bots.sql` (trading bots and their signals), then `supabase/009_strategies_shorts.sql` (short selling in the practice account).
+2. In the SQL editor, run `supabase/schema.sql`, then `supabase/002_memory_guardrails_embeddings.sql` (pgvector, memory, chat, guardrail log), then `supabase/003_trading_features.sql` (price cache, alerts, notifications, push tokens, screener, earnings cache, holdings), then `supabase/004_options_markets.sql` (shared cache for options and market data), then `supabase/005_copilot_journal_billing.sql` (journal, Copilot, plans, usage and subscriptions), then `supabase/006_proactive_growth.sql` (settings and onboarding, watchlist and theses, morning briefs, automations, broker connections, AI cost log, share links), then `supabase/007_trading_email_billing.sql` (paper trading, live orders, weekly email, annual plan and cancel feedback), then `supabase/008_trading_bots.sql` (trading bots and their signals), then `supabase/009_strategies_shorts.sql` (short selling in the practice account), then `supabase/010_forecasts.sql` (Forecasts questions, forecasts and leaderboard names).
 3. Authentication → Providers → Email: enabled. For a quick demo, turn off "Confirm email".
 4. Authentication → URL Configuration: set Site URL to your deployed URL (e.g. `https://finsight.onrender.com`) and add it plus `http://localhost:3001` under Redirect URLs, so confirmation emails link back to the app.
 5. Project Settings → API: copy the URL, the anon key and the service-role key.

@@ -26,7 +26,7 @@ const handle = (fn) => async (req, res) => {
 /** The user's trading rules applied to an order (journal fields), or null when they have no rules. */
 async function rulesCheck(user, order, price) {
   const rules = (await getSettings(user)).rules ?? {};
-  if (!Object.keys(rules).length || order.side === "sell") return null;
+  if (!Object.keys(rules).length || order.side !== "buy") return null;
   return precheckTrade(user.id, rules, { ticker: order.ticker, side: "long", instrument: "stock", quantity: order.qty, entry_price: price, stop_price: order.stop_loss, target_price: order.take_profit, emotion: order.emotion });
 }
 

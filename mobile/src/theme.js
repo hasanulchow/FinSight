@@ -118,6 +118,7 @@ function buildSections(c) {
     markets: s("blue", "globe-outline"),
     portfolio: s("violet", "pie-chart-outline"),
     screener: s("teal", "funnel-outline"),
+    forecasts: s("fuchsia", "telescope-outline"),
     alerts: s("amber", "notifications-outline"),
     copilot: s("violet", "sparkles-outline"),
     journal: s("emerald", "journal-outline"),
